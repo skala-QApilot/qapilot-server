@@ -29,5 +29,9 @@ public record QapilotProperties(Storage storage, Fastapi fastapi) {
             baseUrl = baseUrl == null || baseUrl.isBlank() ? "http://localhost:8001" : baseUrl;
             internalApiToken = internalApiToken == null ? "" : internalApiToken;
         }
+
+        public boolean hasInternalApiToken() {
+            return !internalApiToken.isBlank();
+        }
     }
 }
