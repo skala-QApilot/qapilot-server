@@ -42,7 +42,13 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(authenticationEntryPoint()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/health", "/api/auth/register", "/api/auth/login", "/api/auth/refresh").permitAll()
+                        .requestMatchers(
+                                "/health",
+                                "/api/auth/register",
+                                "/api/auth/login",
+                                "/api/auth/refresh",
+                                "/api/cli/**"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
