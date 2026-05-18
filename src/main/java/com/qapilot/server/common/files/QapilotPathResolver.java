@@ -36,7 +36,7 @@ public class QapilotPathResolver {
     public Path requireExistingQapilotDir(Path targetRoot) {
         Path qapilotDir = qapilotDir(targetRoot);
         if (!qapilotDir.toFile().isDirectory()) {
-            throw new QapilotException(ErrorCode.QAPILOT_001, ".qapilot 경로를 찾을 수 없습니다: " + qapilotDir);
+            throw new QapilotException(ErrorCode.SYSTEM_001, ".qapilot 경로를 찾을 수 없습니다: " + qapilotDir);
         }
         return qapilotDir;
     }

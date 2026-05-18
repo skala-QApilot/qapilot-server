@@ -28,6 +28,7 @@ class HealthControllerTest {
         mockMvc.perform(get("/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.status").value("ok"));
+                .andExpect(jsonPath("$.data.status").value("ok"))
+                .andExpect(jsonPath("$.error").doesNotExist());
     }
 }
