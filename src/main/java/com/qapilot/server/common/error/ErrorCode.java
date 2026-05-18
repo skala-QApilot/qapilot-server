@@ -19,7 +19,17 @@ public enum ErrorCode {
     COMMON_002("COMMON_002", "요청한 리소스를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     COMMON_003("COMMON_003", "서버 처리 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     SYSTEM_001("SYSTEM_001", ".qapilot 경로를 찾을 수 없습니다.", HttpStatus.BAD_REQUEST),
-    FILE_001("FILE_001", "파일을 읽거나 쓸 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+    FILE_001("FILE_001", "파일을 읽거나 쓸 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+    AUTH_001("AUTH_001", "이메일 또는 비밀번호가 일치하지 않습니다.", HttpStatus.UNAUTHORIZED),
+    AUTH_002("AUTH_002", "토큰이 만료되었습니다.", HttpStatus.UNAUTHORIZED),
+    AUTH_003("AUTH_003", "토큰이 유효하지 않습니다.", HttpStatus.UNAUTHORIZED),
+    AUTH_004("AUTH_004", "권한이 부족합니다.", HttpStatus.FORBIDDEN),
+    AUTH_005("AUTH_005", "사용자를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    AUTH_006("AUTH_006", "이미 등록된 이메일입니다.", HttpStatus.CONFLICT),
+    AUTH_007("AUTH_007", "초기 관리자 계정이 이미 생성되었습니다.", HttpStatus.FORBIDDEN),
+    SERVICE_001("SERVICE_001", "서비스를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    SERVICE_002("SERVICE_002", "대상 경로를 찾을 수 없습니다.", HttpStatus.BAD_REQUEST),
+    SERVICE_003("SERVICE_003", "서비스 토큰이 유효하지 않습니다.", HttpStatus.UNAUTHORIZED);
 
     private final String code;
     private final String defaultMessage;
