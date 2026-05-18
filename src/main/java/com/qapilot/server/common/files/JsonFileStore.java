@@ -51,4 +51,11 @@ public class JsonFileStore {
             throw new QapilotException(ErrorCode.FILE_001, "JSON 파일을 저장할 수 없습니다: " + path);
         }
     }
+
+    public <T> T readOrDefault(Path path, TypeReference<T> type, T defaultValue) {
+        if (!Files.exists(path)) {
+            return defaultValue;
+        }
+        return read(path, type);
+    }
 }
