@@ -1,0 +1,13 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: qapilot-server
+
+qapilot:
+  storage:
+    default-target-root: ${QAPILOT_TARGET_ROOT:.}
+  fastapi:
+    base-url: ${QAPILOT_FASTAPI_BASE_URL:http://localhost:8001}
+    internal-api-token: ${QAPILOT_INTERNAL_API_TOKEN:}
