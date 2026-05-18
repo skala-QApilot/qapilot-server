@@ -29,7 +29,13 @@ public enum ErrorCode {
     AUTH_007("AUTH_007", "초기 관리자 계정이 이미 생성되었습니다.", HttpStatus.FORBIDDEN),
     SERVICE_001("SERVICE_001", "서비스를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     SERVICE_002("SERVICE_002", "대상 경로를 찾을 수 없습니다.", HttpStatus.BAD_REQUEST),
-    SERVICE_003("SERVICE_003", "서비스 토큰이 유효하지 않습니다.", HttpStatus.UNAUTHORIZED);
+    SERVICE_003("SERVICE_003", "서비스 토큰이 유효하지 않습니다.", HttpStatus.UNAUTHORIZED),
+    SCENARIO_001("SCENARIO_001", "시나리오를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    SCENARIO_002("SCENARIO_002", "시나리오를 저장할 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+    RUN_001("RUN_001", "실행을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    AGENT_001("AGENT_001", "FastAPI Agent 호출에 실패했습니다.", HttpStatus.BAD_GATEWAY),
+    RESULT_001("RESULT_001", "결과를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    DASHBOARD_001("DASHBOARD_001", "대시보드 데이터를 집계할 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final String code;
     private final String defaultMessage;
