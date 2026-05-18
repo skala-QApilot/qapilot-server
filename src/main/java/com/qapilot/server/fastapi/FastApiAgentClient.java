@@ -4,10 +4,14 @@ import com.qapilot.server.common.config.QapilotProperties;
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.fastapi.dto.AgentRunRequest;
+import com.qapilot.server.fastapi.dto.CodeChangeDetectionRequest;
+import com.qapilot.server.fastapi.dto.ScenarioGenerationRequest;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
@@ -39,6 +43,26 @@ public class FastApiAgentClient {
         return extractTraceId(response);
     }
 
+    public String startScenarioGeneration(
+            String serviceId,
+            String qapilotDir,
+            String trigger,
+            String userInput,
+            List<String> scenarioIds,
+            String filter,
+            List<String> tags
+    ) {
+        ScenarioGenerationRequest request = new ScenarioGenerationRequest(
+                serviceId, qapilotDir, trigger, userInput, scenarioIds, filter, tags
+        );
+        return extractTraceId(post("/api/agent/scenario-generation", request));
+    }
+
+    public String startCodeChangeDetection(String serviceId, String qapilotDir) {
+        CodeChangeDetectionRequest request = new CodeChangeDetectionRequest(serviceId, qapilotDir);
+        return extractTraceId(post("/api/agent/code-change-detection", request));
+    }
+
     public Map<String, Object> trace(String traceId, String qapilotDir) {
         try {
             return webClient.get()
@@ -50,7 +74,7 @@ public class FastApiAgentClient {
                     .bodyToMono(mapType())
                     .block();
         } catch (Exception e) {
-            throw new QapilotException(ErrorCode.AGENT_001, "FastAPI trace 조회에 실패했습니다.");
+            throw mapAgentException(e, "FastAPI trace 조회에 실패했습니다.");
         }
     }
 
@@ -64,7 +88,7 @@ public class FastApiAgentClient {
                     .bodyToMono(mapType())
                     .block();
         } catch (Exception e) {
-            throw new QapilotException(ErrorCode.AGENT_001, "FastAPI Agent 호출에 실패했습니다.");
+            throw mapAgentException(e, "FastAPI Agent 호출에 실패했습니다.");
         }
     }
 
@@ -85,9 +109,27 @@ public class FastApiAgentClient {
     }
 
     private void internalHeaders(HttpHeaders headers) {
-        if (properties.fastapi().hasInternalApiToken()) {
-            headers.setBearerAuth(properties.fastapi().internalApiToken());
+        if (!properties.fastapi().hasInternalApiToken()) {
+            throw new QapilotException(ErrorCode.AGENT_002, "QAPILOT_INTERNAL_API_TOKEN이 설정되지 않았습니다.");
         }
+        headers.setBearerAuth(properties.fastapi().internalApiToken());
+    }
+
+    private QapilotException mapAgentException(Exception exception, String fallbackMessage) {
+        if (exception instanceof QapilotException qapilotException) {
+            return qapilotException;
+        }
+        if (exception instanceof WebClientResponseException responseException) {
+            HttpStatus status = HttpStatus.valueOf(responseException.getStatusCode().value());
+            if (status == HttpStatus.UNAUTHORIZED || status == HttpStatus.FORBIDDEN) {
+                return new QapilotException(ErrorCode.AGENT_002, "FastAPI 내부 인증에 실패했습니다.");
+            }
+            if (status.is4xxClientError()) {
+                return new QapilotException(ErrorCode.AGENT_003, "FastAPI Agent 요청이 올바르지 않습니다.");
+            }
+            return new QapilotException(ErrorCode.AGENT_001, fallbackMessage);
+        }
+        return new QapilotException(ErrorCode.AGENT_001, fallbackMessage);
     }
 
     @SuppressWarnings("unchecked")

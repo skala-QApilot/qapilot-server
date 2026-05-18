@@ -88,7 +88,10 @@ public class RunService {
             if (response != null && response.get("trace_id") != null) {
                 return response;
             }
-        } catch (QapilotException ignored) {
+        } catch (QapilotException exception) {
+            if (exception.errorCode() != ErrorCode.AGENT_001) {
+                throw exception;
+            }
             return trace(serviceId, traceId);
         }
         return trace(serviceId, traceId);
