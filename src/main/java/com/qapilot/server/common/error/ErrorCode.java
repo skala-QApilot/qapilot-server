@@ -46,7 +46,16 @@ public enum ErrorCode {
     CLI_SYNC_003("CLI_SYNC_003", "CLI sync 저장에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     MEMBER_001("MEMBER_001", "멤버를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     MEMBER_002("MEMBER_002", "멤버 초대에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
-    NOTIFICATION_001("NOTIFICATION_001", "알림을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+    NOTIFICATION_001("NOTIFICATION_001", "알림을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    RTM_001("RTM_001", "RTM 버전을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    RTM_002("RTM_002", "요구사항을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    VERSION_001("VERSION_001", "시나리오 버전을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    GROUP_001("GROUP_001", "시나리오 그룹을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    GROUP_002("GROUP_002", "스케줄 생성에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+    CHANGE_REQUEST_001("CHANGE_REQUEST_001", "변경 요청을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    CHANGE_REQUEST_002("CHANGE_REQUEST_002", "유효하지 않은 status 값입니다.", HttpStatus.BAD_REQUEST),
+    RETEST_001("RETEST_001", "재테스트 그룹을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    RETEST_002("RETEST_002", "failedTcIds가 필요합니다.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String defaultMessage;
