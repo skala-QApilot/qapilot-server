@@ -43,7 +43,10 @@ public enum ErrorCode {
     DASHBOARD_001("DASHBOARD_001", "대시보드 데이터를 집계할 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     CLI_SYNC_001("CLI_SYNC_001", "CLI 서비스 토큰이 유효하지 않습니다.", HttpStatus.UNAUTHORIZED),
     CLI_SYNC_002("CLI_SYNC_002", "CLI sync items가 비어 있습니다.", HttpStatus.BAD_REQUEST),
-    CLI_SYNC_003("CLI_SYNC_003", "CLI sync 저장에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+    CLI_SYNC_003("CLI_SYNC_003", "CLI sync 저장에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+    MEMBER_001("MEMBER_001", "멤버를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    MEMBER_002("MEMBER_002", "멤버 초대에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+    NOTIFICATION_001("NOTIFICATION_001", "알림을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
 
     private final String code;
     private final String defaultMessage;
