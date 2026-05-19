@@ -1,6 +1,7 @@
 package com.qapilot.server.agent;
 
 import com.qapilot.server.agent.dto.AgentStartResponse;
+import com.qapilot.server.agent.dto.CodeGenerationStartRequest;
 import com.qapilot.server.agent.dto.ScenarioGenerationStartRequest;
 import com.qapilot.server.common.response.ApiResponse;
 import java.util.Map;
@@ -37,5 +38,13 @@ public class AgentExecutionController {
     @PostMapping("/code-change-detection")
     public ApiResponse<Map<String, AgentStartResponse>> codeChangeDetection(@PathVariable String serviceId) {
         return ApiResponse.ok(Map.of("agent", agentExecutionService.startCodeChangeDetection(serviceId)));
+    }
+
+    @PostMapping("/code-generation")
+    public ApiResponse<Map<String, AgentStartResponse>> codeGeneration(
+            @PathVariable String serviceId,
+            @RequestBody(required = false) CodeGenerationStartRequest request
+    ) {
+        return ApiResponse.ok(Map.of("agent", agentExecutionService.startCodeGeneration(serviceId, request)));
     }
 }

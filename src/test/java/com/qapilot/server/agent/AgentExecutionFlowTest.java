@@ -82,6 +82,32 @@ class AgentExecutionFlowTest {
                 .andExpect(jsonPath("$.data.agent.run_id").value("TRACE-CODE"));
     }
 
+    @Test
+    void codeGenerationStartsAgent() throws Exception {
+        String accessToken = registerAdmin().get("access_token").asText();
+        JsonNode service = createService(accessToken);
+        String serviceId = service.get("service_id").asText();
+        String qapilotDir = service.get("qapilot_dir").asText();
+
+        when(fastApiAgentClient.startCodeGeneration(serviceId, qapilotDir, null))
+                .thenReturn("TRACE-CODEGEN-ALL");
+        when(fastApiAgentClient.startCodeGeneration(serviceId, qapilotDir, List.of("TS-001")))
+                .thenReturn("TRACE-CODEGEN-TS001");
+
+        mockMvc.perform(post("/api/services/" + serviceId + "/code-generation")
+                        .header("Authorization", bearer(accessToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.agent.trace_id").value("TRACE-CODEGEN-ALL"))
+                .andExpect(jsonPath("$.data.agent.status").value("running"));
+
+        mockMvc.perform(post("/api/services/" + serviceId + "/code-generation")
+                        .header("Authorization", bearer(accessToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"scenario_ids\":[\"TS-001\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.agent.trace_id").value("TRACE-CODEGEN-TS001"));
+    }
+
     private JsonNode registerAdmin() throws Exception {
         String response = mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)

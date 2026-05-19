@@ -1,6 +1,7 @@
 package com.qapilot.server.agent;
 
 import com.qapilot.server.agent.dto.AgentStartResponse;
+import com.qapilot.server.agent.dto.CodeGenerationStartRequest;
 import com.qapilot.server.agent.dto.ScenarioGenerationStartRequest;
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
@@ -44,6 +45,16 @@ public class AgentExecutionService {
     public AgentStartResponse startCodeChangeDetection(String serviceId) {
         QapilotService service = serviceDomainService.getById(serviceId);
         String traceId = fastApiAgentClient.startCodeChangeDetection(service.serviceId(), service.qapilotDir());
+        return AgentStartResponse.running(traceId);
+    }
+
+    public AgentStartResponse startCodeGeneration(String serviceId, CodeGenerationStartRequest request) {
+        QapilotService service = serviceDomainService.getById(serviceId);
+        String traceId = fastApiAgentClient.startCodeGeneration(
+                service.serviceId(),
+                service.qapilotDir(),
+                request == null ? null : request.scenarioIds()
+        );
         return AgentStartResponse.running(traceId);
     }
 

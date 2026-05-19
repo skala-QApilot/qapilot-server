@@ -5,6 +5,7 @@ import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.fastapi.dto.AgentRunRequest;
 import com.qapilot.server.fastapi.dto.CodeChangeDetectionRequest;
+import com.qapilot.server.fastapi.dto.CodeGenerationRequest;
 import com.qapilot.server.fastapi.dto.ScenarioGenerationRequest;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +62,11 @@ public class FastApiAgentClient {
     public String startCodeChangeDetection(String serviceId, String qapilotDir) {
         CodeChangeDetectionRequest request = new CodeChangeDetectionRequest(serviceId, qapilotDir);
         return extractTraceId(post("/api/agent/code-change-detection", request));
+    }
+
+    public String startCodeGeneration(String serviceId, String qapilotDir, List<String> scenarioIds) {
+        CodeGenerationRequest request = new CodeGenerationRequest(serviceId, qapilotDir, scenarioIds);
+        return extractTraceId(post("/api/agent/code-generation", request));
     }
 
     public Map<String, Object> trace(String traceId, String qapilotDir) {
