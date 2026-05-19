@@ -18,7 +18,10 @@ public record ResultResponse(
         String error,
         Double confidence,
         @JsonProperty("total_cost") double totalCost,
-        @JsonProperty("result_summary") Map<String, Object> resultSummary
+        @JsonProperty("result_summary") Map<String, Object> resultSummary,
+        @JsonProperty("pass_count") int passCount,
+        @JsonProperty("fail_count") int failCount,
+        @JsonProperty("total_tc_count") int totalTcCount
 ) {
     @SuppressWarnings("unchecked")
     public static ResultResponse fromTrace(Map<String, Object> trace) {
@@ -26,6 +29,18 @@ public record ResultResponse(
         Map<String, Object> resultSummary = summary instanceof Map<?, ?> map
                 ? (Map<String, Object>) map
                 : Map.of();
+        int passCount = 0;
+        int failCount = 0;
+        Object tcResults = trace.get("tc_results");
+        if (tcResults instanceof Map<?, ?> tcMap) {
+            for (Object v : tcMap.values()) {
+                if (v == null) continue;
+                String s = v.toString();
+                if ("passed".equals(s)) passCount++;
+                else if ("failed".equals(s)) failCount++;
+            }
+        }
+        int totalTcCount = tcResults instanceof Map<?, ?> tcMap2 ? tcMap2.size() : 0;
         return new ResultResponse(
                 stringValue(trace.get("trace_id")),
                 stringValue(trace.get("command")),
@@ -35,7 +50,10 @@ public record ResultResponse(
                 nullableString(trace.get("error")),
                 doubleOrNull(trace.get("confidence")),
                 doubleValue(trace.get("total_cost")),
-                resultSummary
+                resultSummary,
+                passCount,
+                failCount,
+                totalTcCount
         );
     }
 
