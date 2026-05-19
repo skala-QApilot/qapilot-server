@@ -1,3 +1,5 @@
+# 로컬 개발 시: ./gradlew bootRun --args="--spring.profiles.active=dev"
+# dev 프로필 활성화 시 admin@qapilot.com / admin1234 시드 (DevTestUserSeeder)
 server:
   port: 8080
 

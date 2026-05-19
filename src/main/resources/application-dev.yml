@@ -1,0 +1,11 @@
+# dev 프로필 — 로컬 개발용 추가 설정.
+# 사용법: ./gradlew bootRun --args="--spring.profiles.active=dev"
+#         또는 SPRING_PROFILES_ACTIVE=dev java -jar app.jar
+#
+# DevTestUserSeeder 가 활성화되어 admin@qapilot.com / admin1234 계정을 자동 시드한다.
+qapilot:
+  dev:
+    seed-admin:
+      email: ${QAPILOT_DEV_ADMIN_EMAIL:admin@qapilot.com}
+      password: ${QAPILOT_DEV_ADMIN_PASSWORD:admin1234}
+      name: ${QAPILOT_DEV_ADMIN_NAME:테스트 관리자}
