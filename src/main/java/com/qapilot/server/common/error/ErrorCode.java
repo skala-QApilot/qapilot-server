@@ -34,6 +34,7 @@ public enum ErrorCode {
     SCENARIO_001("SCENARIO_001", "시나리오를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     SCENARIO_002("SCENARIO_002", "시나리오를 저장할 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     RUN_001("RUN_001", "실행을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    TRACE_001("TRACE_001", "trace를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     AGENT_001("AGENT_001", "FastAPI Agent 호출에 실패했습니다.", HttpStatus.BAD_GATEWAY),
     AGENT_002("AGENT_002", "FastAPI 내부 인증에 실패했습니다.", HttpStatus.UNAUTHORIZED),
     AGENT_003("AGENT_003", "FastAPI Agent 요청이 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
