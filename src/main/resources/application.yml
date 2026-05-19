@@ -11,3 +11,5 @@ qapilot:
   fastapi:
     base-url: ${QAPILOT_FASTAPI_BASE_URL:http://localhost:8001}
     internal-api-token: ${QAPILOT_INTERNAL_API_TOKEN:}
+  cors:
+    allowed-origins: ${QAPILOT_CORS_ALLOWED_ORIGINS:http://localhost:5173}

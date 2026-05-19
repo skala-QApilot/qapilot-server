@@ -15,7 +15,7 @@ public record QapilotProperties(Storage storage, Fastapi fastapi, Cors cors) {
     public QapilotProperties {
         storage = storage == null ? new Storage(".") : storage;
         fastapi = fastapi == null ? new Fastapi("http://localhost:8001", "") : fastapi;
-        cors = cors == null ? new Cors(null, null, null, true) : cors;
+        cors = cors == null ? new Cors(null, null, null, null) : cors;
     }
 
     public record Storage(String defaultTargetRoot) {
@@ -41,7 +41,7 @@ public record QapilotProperties(Storage storage, Fastapi fastapi, Cors cors) {
             List<String> allowedOrigins,
             List<String> allowedMethods,
             List<String> allowedHeaders,
-            boolean allowCredentials
+            Boolean allowCredentials
     ) {
         public Cors {
             allowedOrigins = (allowedOrigins == null || allowedOrigins.isEmpty())
@@ -53,6 +53,7 @@ public record QapilotProperties(Storage storage, Fastapi fastapi, Cors cors) {
             allowedHeaders = (allowedHeaders == null || allowedHeaders.isEmpty())
                     ? List.of("*")
                     : List.copyOf(allowedHeaders);
+            allowCredentials = allowCredentials == null ? Boolean.TRUE : allowCredentials;
         }
     }
 }

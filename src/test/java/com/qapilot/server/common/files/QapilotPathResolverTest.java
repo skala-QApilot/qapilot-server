@@ -52,7 +52,8 @@ class QapilotPathResolverTest {
     private QapilotProperties properties(Path targetRoot) {
         return new QapilotProperties(
                 new QapilotProperties.Storage(targetRoot.toString()),
-                new QapilotProperties.Fastapi("http://localhost:8001", "")
+                new QapilotProperties.Fastapi("http://localhost:8001", ""),
+                null
         );
     }
 }

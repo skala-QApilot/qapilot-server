@@ -22,7 +22,8 @@ class FastApiAgentClientTest {
     void missingInternalTokenFailsAtCallTime() {
         QapilotProperties properties = new QapilotProperties(
                 new QapilotProperties.Storage("."),
-                new QapilotProperties.Fastapi("http://localhost:8001", "")
+                new QapilotProperties.Fastapi("http://localhost:8001", ""),
+                null
         );
         FastApiAgentClient client = new FastApiAgentClient(WebClient.builder(), properties);
 
