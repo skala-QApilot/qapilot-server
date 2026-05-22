@@ -84,11 +84,18 @@ public class ServiceDomainService {
                 now,
                 null,
                 now,
-                now
+                now,
+                nullIfBlank(request.repoUrl()),
+                nullIfBlank(request.repoToken()),
+                nullIfBlank(request.repoBranch())
         );
         services.add(service);
         serviceFileStore.saveServices(services);
         return service;
+    }
+
+    private static String nullIfBlank(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     public QapilotService getById(String serviceId) {
@@ -131,7 +138,8 @@ public class ServiceDomainService {
         QapilotService rotated = new QapilotService(
                 current.serviceId(), current.projectSlug(), current.displayName(), current.description(),
                 current.targetRoot(), current.qapilotDir(), current.dashboardUrl(), generateServerAuthToken(),
-                now(), null, current.createdAt(), now()
+                now(), null, current.createdAt(), now(),
+                current.repoUrl(), current.repoToken(), current.repoBranch()
         );
         serviceFileStore.saveServices(replaceService(services, rotated));
         return rotated;
@@ -236,7 +244,10 @@ public class ServiceDomainService {
                 current.tokenIssuedAt(),
                 current.tokenExpiresAt(),
                 current.createdAt(),
-                updatedAt
+                updatedAt,
+                current.repoUrl(),
+                current.repoToken(),
+                current.repoBranch()
         );
     }
 

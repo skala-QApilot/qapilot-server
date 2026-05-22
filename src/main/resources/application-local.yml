@@ -1,3 +1,5 @@
 qapilot:
   storage:
     default-target-root: ${QAPILOT_TARGET_ROOT:../system-under-test}
+  fastapi:
+    internal-api-token: qapilot-dev-token-1234
