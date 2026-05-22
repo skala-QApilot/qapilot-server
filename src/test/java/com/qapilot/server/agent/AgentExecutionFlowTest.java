@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qapilot.server.fastapi.FastApiAgentClient;
+import com.qapilot.server.service.domain.RepoConfig;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -63,10 +64,10 @@ class AgentExecutionFlowTest {
 
         when(fastApiAgentClient.startScenarioGeneration(
                 serviceId, qapilotDir, "natural_lang", "로그인 시나리오 생성", null, null, null,
-                null, null, null
+                null
         )).thenReturn("TRACE-GEN");
         when(fastApiAgentClient.startCodeChangeDetection(
-                serviceId, qapilotDir, null, null, null
+                serviceId, qapilotDir, null
         )).thenReturn("TRACE-CODE");
 
         mockMvc.perform(post("/api/services/" + serviceId + "/scenario-generation")
@@ -94,7 +95,7 @@ class AgentExecutionFlowTest {
 
         when(fastApiAgentClient.startScenarioGeneration(
                 serviceId, qapilotDir, "init", null, null, null, null,
-                "https://github.com/owner/repo", "ghp_xxx", "main"
+                List.of(new RepoConfig("https://github.com/owner/repo", "ghp_xxx", "main", "frontend"))
         )).thenReturn("TRACE-GIT");
 
         mockMvc.perform(post("/api/services/" + serviceId + "/scenario-generation")
@@ -114,7 +115,7 @@ class AgentExecutionFlowTest {
 
         when(fastApiAgentClient.startCodeChangeDetection(
                 serviceId, qapilotDir,
-                "https://github.com/owner/repo", "ghp_xxx", "main"
+                List.of(new RepoConfig("https://github.com/owner/repo", "ghp_xxx", "main", "frontend"))
         )).thenReturn("TRACE-CCD-GIT");
 
         mockMvc.perform(post("/api/services/" + serviceId + "/code-change-detection")
@@ -178,7 +179,8 @@ class AgentExecutionFlowTest {
     private JsonNode createServiceWithGithub(String accessToken, String name) throws Exception {
         String body = """
                 {"name":"%s","description":"SUT","target_root":"%s",
-                 "repo_url":"https://github.com/owner/repo","repo_token":"ghp_xxx","repo_branch":"main"}
+                 "repos":[{"repo_url":"https://github.com/owner/repo","token":"ghp_xxx","branch":"main","role":"frontend"}],
+                 "staging_url":"https://staging.example.com"}
                 """.formatted(name, targetRoot.toString());
         String response = mockMvc.perform(post("/api/services")
                         .header("Authorization", bearer(accessToken))

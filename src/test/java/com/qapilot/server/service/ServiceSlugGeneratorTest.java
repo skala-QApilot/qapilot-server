@@ -27,7 +27,7 @@ class ServiceSlugGeneratorTest {
                 "svc-1", "system-under-test", "System Under Test", "",
                 "/tmp/sut", "/tmp/sut/.qapilot", "http://localhost:8080/system-under-test",
                 "token", "now", null, "now", "now",
-                null, null, null
+                null, null
         );
 
         assertThat(generator.generate("System Under Test", List.of(existing))).isEqualTo("system-under-test-2");

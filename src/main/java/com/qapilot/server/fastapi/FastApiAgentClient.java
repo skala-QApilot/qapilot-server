@@ -7,6 +7,7 @@ import com.qapilot.server.fastapi.dto.AgentRunRequest;
 import com.qapilot.server.fastapi.dto.CodeChangeDetectionRequest;
 import com.qapilot.server.fastapi.dto.CodeGenerationRequest;
 import com.qapilot.server.fastapi.dto.ScenarioGenerationRequest;
+import com.qapilot.server.service.domain.RepoConfig;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
@@ -52,13 +53,10 @@ public class FastApiAgentClient {
             List<String> scenarioIds,
             String filter,
             List<String> tags,
-            String repoUrl,
-            String repoToken,
-            String repoBranch
+            List<RepoConfig> repos
     ) {
         ScenarioGenerationRequest request = new ScenarioGenerationRequest(
-                serviceId, qapilotDir, trigger, userInput, scenarioIds, filter, tags,
-                repoUrl, repoToken, repoBranch
+                serviceId, qapilotDir, trigger, userInput, scenarioIds, filter, tags, repos
         );
         return extractTraceId(post("/api/agent/scenario-generation", request));
     }
@@ -66,13 +64,9 @@ public class FastApiAgentClient {
     public String startCodeChangeDetection(
             String serviceId,
             String qapilotDir,
-            String repoUrl,
-            String repoToken,
-            String repoBranch
+            List<RepoConfig> repos
     ) {
-        CodeChangeDetectionRequest request = new CodeChangeDetectionRequest(
-                serviceId, qapilotDir, repoUrl, repoToken, repoBranch
-        );
+        CodeChangeDetectionRequest request = new CodeChangeDetectionRequest(serviceId, qapilotDir, repos);
         return extractTraceId(post("/api/agent/code-change-detection", request));
     }
 

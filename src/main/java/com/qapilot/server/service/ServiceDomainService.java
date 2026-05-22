@@ -5,6 +5,7 @@ import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.common.files.QapilotPathResolver;
 import com.qapilot.server.service.domain.QapilotService;
+import com.qapilot.server.service.domain.RepoConfig;
 import com.qapilot.server.service.dto.CredentialsResponse;
 import com.qapilot.server.service.dto.ProjectDashboardResponse;
 import com.qapilot.server.service.dto.ProjectSummaryResponse;
@@ -85,9 +86,8 @@ public class ServiceDomainService {
                 null,
                 now,
                 now,
-                nullIfBlank(request.repoUrl()),
-                nullIfBlank(request.repoToken()),
-                nullIfBlank(request.repoBranch())
+                normalizeRepos(request.repos()),
+                nullIfBlank(request.stagingUrl())
         );
         services.add(service);
         serviceFileStore.saveServices(services);
@@ -96,6 +96,26 @@ public class ServiceDomainService {
 
     private static String nullIfBlank(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /**
+     * 입력 repos 를 정규화한다 — blank repo_url 인 entry 는 drop, 나머지 필드는 trim.
+     * 결과가 비면 null 반환 (services.json 에 빈 배열 대신 키 자체 생략).
+     */
+    private static List<RepoConfig> normalizeRepos(List<RepoConfig> repos) {
+        if (repos == null || repos.isEmpty()) {
+            return null;
+        }
+        List<RepoConfig> cleaned = repos.stream()
+                .filter(r -> r != null && r.repoUrl() != null && !r.repoUrl().isBlank())
+                .map(r -> new RepoConfig(
+                        r.repoUrl().trim(),
+                        nullIfBlank(r.token()),
+                        nullIfBlank(r.branch()),
+                        nullIfBlank(r.role())
+                ))
+                .toList();
+        return cleaned.isEmpty() ? null : cleaned;
     }
 
     public QapilotService getById(String serviceId) {
@@ -139,7 +159,7 @@ public class ServiceDomainService {
                 current.serviceId(), current.projectSlug(), current.displayName(), current.description(),
                 current.targetRoot(), current.qapilotDir(), current.dashboardUrl(), generateServerAuthToken(),
                 now(), null, current.createdAt(), now(),
-                current.repoUrl(), current.repoToken(), current.repoBranch()
+                current.repos(), current.stagingUrl()
         );
         serviceFileStore.saveServices(replaceService(services, rotated));
         return rotated;
@@ -245,9 +265,8 @@ public class ServiceDomainService {
                 current.tokenExpiresAt(),
                 current.createdAt(),
                 updatedAt,
-                current.repoUrl(),
-                current.repoToken(),
-                current.repoBranch()
+                current.repos(),
+                current.stagingUrl()
         );
     }
 

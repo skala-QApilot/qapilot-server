@@ -38,9 +38,7 @@ public class AgentExecutionService {
                 request.scenarioIds(),
                 request.filter(),
                 request.tags(),
-                service.repoUrl(),
-                service.repoToken(),
-                service.repoBranch()
+                service.repos()
         );
         return AgentStartResponse.running(traceId);
     }
@@ -50,9 +48,7 @@ public class AgentExecutionService {
         String traceId = fastApiAgentClient.startCodeChangeDetection(
                 service.serviceId(),
                 service.qapilotDir(),
-                service.repoUrl(),
-                service.repoToken(),
-                service.repoBranch()
+                service.repos()
         );
         return AgentStartResponse.running(traceId);
     }

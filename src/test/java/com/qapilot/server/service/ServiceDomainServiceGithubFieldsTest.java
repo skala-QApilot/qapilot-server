@@ -7,15 +7,17 @@ import com.qapilot.server.common.config.QapilotProperties;
 import com.qapilot.server.common.files.JsonFileStore;
 import com.qapilot.server.common.files.QapilotPathResolver;
 import com.qapilot.server.service.domain.QapilotService;
+import com.qapilot.server.service.domain.RepoConfig;
 import com.qapilot.server.service.dto.ServiceCreateRequest;
 import com.qapilot.server.service.store.ServiceFileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * ServiceDomainService.create() 의 GitHub 필드 보관 검증.
+ * ServiceDomainService.create() 의 멀티 레포 + stagingUrl 보관 검증.
  *
  * <p>Author: C
  * <br>Created: 2026-05-22
@@ -36,7 +38,7 @@ class ServiceDomainServiceGithubFieldsTest {
     }
 
     @Test
-    void createPersistsGithubFields(@TempDir Path tempDir) throws Exception {
+    void createPersistsMultipleReposAndStagingUrl(@TempDir Path tempDir) throws Exception {
         Path targetRoot = tempDir.resolve("sut");
         Files.createDirectories(targetRoot);
         ServiceDomainService domain = newService(targetRoot);
@@ -44,22 +46,25 @@ class ServiceDomainServiceGithubFieldsTest {
         ServiceCreateRequest request = new ServiceCreateRequest(
                 "My Service", "desc",
                 targetRoot.toString(),
-                "https://github.com/owner/repo",
-                "ghp_xxx",
-                "main"
+                List.of(
+                        new RepoConfig("https://github.com/owner/frontend", "ghp_a", "main", "frontend"),
+                        new RepoConfig("https://github.com/owner/backend", "ghp_b", "develop", "backend")
+                ),
+                "https://staging.example.com"
         );
         QapilotService created = domain.create(request);
 
-        assertThat(created.repoUrl()).isEqualTo("https://github.com/owner/repo");
-        assertThat(created.repoToken()).isEqualTo("ghp_xxx");
-        assertThat(created.repoBranch()).isEqualTo("main");
-        // 다른 메타도 정상
+        assertThat(created.repos()).hasSize(2);
+        assertThat(created.repos().get(0).repoUrl()).isEqualTo("https://github.com/owner/frontend");
+        assertThat(created.repos().get(0).role()).isEqualTo("frontend");
+        assertThat(created.repos().get(1).repoUrl()).isEqualTo("https://github.com/owner/backend");
+        assertThat(created.repos().get(1).branch()).isEqualTo("develop");
+        assertThat(created.stagingUrl()).isEqualTo("https://staging.example.com");
         assertThat(created.displayName()).isEqualTo("My Service");
-        assertThat(created.projectSlug()).isEqualTo("my-service");
     }
 
     @Test
-    void createAcceptsNullGithubFields(@TempDir Path tempDir) throws Exception {
+    void createAcceptsNullRepos(@TempDir Path tempDir) throws Exception {
         Path targetRoot = tempDir.resolve("sut");
         Files.createDirectories(targetRoot);
         ServiceDomainService domain = newService(targetRoot);
@@ -67,50 +72,71 @@ class ServiceDomainServiceGithubFieldsTest {
         ServiceCreateRequest request = new ServiceCreateRequest(
                 "Solo Service", null,
                 targetRoot.toString(),
-                null, null, null
+                null, null
         );
         QapilotService created = domain.create(request);
 
-        assertThat(created.repoUrl()).isNull();
-        assertThat(created.repoToken()).isNull();
-        assertThat(created.repoBranch()).isNull();
+        assertThat(created.repos()).isNull();
+        assertThat(created.stagingUrl()).isNull();
     }
 
     @Test
-    void createTrimsAndNullifiesBlankGithubFields(@TempDir Path tempDir) throws Exception {
+    void createDropsBlankRepoUrlEntries(@TempDir Path tempDir) throws Exception {
         Path targetRoot = tempDir.resolve("sut");
         Files.createDirectories(targetRoot);
         ServiceDomainService domain = newService(targetRoot);
 
         ServiceCreateRequest request = new ServiceCreateRequest(
-                "Blank Fields Service", null,
+                "Mixed", null,
                 targetRoot.toString(),
-                "  https://github.com/owner/repo  ",
-                "",
-                "   "
+                List.of(
+                        new RepoConfig("  https://github.com/owner/keep  ", " ghp_x ", null, null),
+                        new RepoConfig("", "ghp_drop", null, null),
+                        new RepoConfig(null, null, null, null)
+                ),
+                null
         );
         QapilotService created = domain.create(request);
 
-        assertThat(created.repoUrl()).isEqualTo("https://github.com/owner/repo");
-        assertThat(created.repoToken()).isNull();
-        assertThat(created.repoBranch()).isNull();
+        assertThat(created.repos()).hasSize(1);
+        assertThat(created.repos().get(0).repoUrl()).isEqualTo("https://github.com/owner/keep");
+        assertThat(created.repos().get(0).token()).isEqualTo("ghp_x");
+        assertThat(created.repos().get(0).branch()).isNull();
+        assertThat(created.repos().get(0).role()).isNull();
     }
 
     @Test
-    void rotateTokenPreservesGithubFields(@TempDir Path tempDir) throws Exception {
+    void createReturnsNullReposWhenAllBlank(@TempDir Path tempDir) throws Exception {
+        Path targetRoot = tempDir.resolve("sut");
+        Files.createDirectories(targetRoot);
+        ServiceDomainService domain = newService(targetRoot);
+
+        ServiceCreateRequest request = new ServiceCreateRequest(
+                "All Blank", null,
+                targetRoot.toString(),
+                List.of(new RepoConfig("", "tok", null, null)),
+                null
+        );
+        QapilotService created = domain.create(request);
+        assertThat(created.repos()).isNull();
+    }
+
+    @Test
+    void rotateTokenPreservesReposAndStagingUrl(@TempDir Path tempDir) throws Exception {
         Path targetRoot = tempDir.resolve("sut");
         Files.createDirectories(targetRoot);
         ServiceDomainService domain = newService(targetRoot);
 
         QapilotService created = domain.create(new ServiceCreateRequest(
                 "Rotated", null, targetRoot.toString(),
-                "https://github.com/x/y", "tok", "dev"
+                List.of(new RepoConfig("https://github.com/x/y", "tok", "dev", "core")),
+                "https://staging"
         ));
         QapilotService rotated = domain.rotateToken(created.serviceId());
 
         assertThat(rotated.serverAuthToken()).isNotEqualTo(created.serverAuthToken());
-        assertThat(rotated.repoUrl()).isEqualTo("https://github.com/x/y");
-        assertThat(rotated.repoToken()).isEqualTo("tok");
-        assertThat(rotated.repoBranch()).isEqualTo("dev");
+        assertThat(rotated.repos()).hasSize(1);
+        assertThat(rotated.repos().get(0).repoUrl()).isEqualTo("https://github.com/x/y");
+        assertThat(rotated.stagingUrl()).isEqualTo("https://staging");
     }
 }
