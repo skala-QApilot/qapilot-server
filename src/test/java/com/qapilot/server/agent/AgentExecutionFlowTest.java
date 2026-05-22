@@ -62,9 +62,12 @@ class AgentExecutionFlowTest {
         String qapilotDir = service.get("qapilot_dir").asText();
 
         when(fastApiAgentClient.startScenarioGeneration(
-                serviceId, qapilotDir, "natural_lang", "로그인 시나리오 생성", null, null, null
+                serviceId, qapilotDir, "natural_lang", "로그인 시나리오 생성", null, null, null,
+                null, null, null
         )).thenReturn("TRACE-GEN");
-        when(fastApiAgentClient.startCodeChangeDetection(serviceId, qapilotDir)).thenReturn("TRACE-CODE");
+        when(fastApiAgentClient.startCodeChangeDetection(
+                serviceId, qapilotDir, null, null, null
+        )).thenReturn("TRACE-CODE");
 
         mockMvc.perform(post("/api/services/" + serviceId + "/scenario-generation")
                         .header("Authorization", bearer(accessToken))
@@ -80,6 +83,44 @@ class AgentExecutionFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.agent.trace_id").value("TRACE-CODE"))
                 .andExpect(jsonPath("$.data.agent.run_id").value("TRACE-CODE"));
+    }
+
+    @Test
+    void scenarioGenerationForwardsGithubFieldsWhenServiceHasThem() throws Exception {
+        String accessToken = registerAdmin().get("access_token").asText();
+        JsonNode service = createServiceWithGithub(accessToken, "git-aware service");
+        String serviceId = service.get("service_id").asText();
+        String qapilotDir = service.get("qapilot_dir").asText();
+
+        when(fastApiAgentClient.startScenarioGeneration(
+                serviceId, qapilotDir, "init", null, null, null, null,
+                "https://github.com/owner/repo", "ghp_xxx", "main"
+        )).thenReturn("TRACE-GIT");
+
+        mockMvc.perform(post("/api/services/" + serviceId + "/scenario-generation")
+                        .header("Authorization", bearer(accessToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"trigger\":\"init\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.agent.trace_id").value("TRACE-GIT"));
+    }
+
+    @Test
+    void codeChangeDetectionForwardsGithubFieldsWhenServiceHasThem() throws Exception {
+        String accessToken = registerAdmin().get("access_token").asText();
+        JsonNode service = createServiceWithGithub(accessToken, "git-aware ccd");
+        String serviceId = service.get("service_id").asText();
+        String qapilotDir = service.get("qapilot_dir").asText();
+
+        when(fastApiAgentClient.startCodeChangeDetection(
+                serviceId, qapilotDir,
+                "https://github.com/owner/repo", "ghp_xxx", "main"
+        )).thenReturn("TRACE-CCD-GIT");
+
+        mockMvc.perform(post("/api/services/" + serviceId + "/code-change-detection")
+                        .header("Authorization", bearer(accessToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.agent.trace_id").value("TRACE-CCD-GIT"));
     }
 
     @Test
@@ -123,6 +164,22 @@ class AgentExecutionFlowTest {
         String body = """
                 {"name":"system under test","description":"SUT","target_root":"%s"}
                 """.formatted(targetRoot.toString());
+        String response = mockMvc.perform(post("/api/services")
+                        .header("Authorization", bearer(accessToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readTree(response).get("data").get("service");
+    }
+
+    private JsonNode createServiceWithGithub(String accessToken, String name) throws Exception {
+        String body = """
+                {"name":"%s","description":"SUT","target_root":"%s",
+                 "repo_url":"https://github.com/owner/repo","repo_token":"ghp_xxx","repo_branch":"main"}
+                """.formatted(name, targetRoot.toString());
         String response = mockMvc.perform(post("/api/services")
                         .header("Authorization", bearer(accessToken))
                         .contentType(MediaType.APPLICATION_JSON)

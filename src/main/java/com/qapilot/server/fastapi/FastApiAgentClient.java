@@ -51,16 +51,28 @@ public class FastApiAgentClient {
             String userInput,
             List<String> scenarioIds,
             String filter,
-            List<String> tags
+            List<String> tags,
+            String repoUrl,
+            String repoToken,
+            String repoBranch
     ) {
         ScenarioGenerationRequest request = new ScenarioGenerationRequest(
-                serviceId, qapilotDir, trigger, userInput, scenarioIds, filter, tags
+                serviceId, qapilotDir, trigger, userInput, scenarioIds, filter, tags,
+                repoUrl, repoToken, repoBranch
         );
         return extractTraceId(post("/api/agent/scenario-generation", request));
     }
 
-    public String startCodeChangeDetection(String serviceId, String qapilotDir) {
-        CodeChangeDetectionRequest request = new CodeChangeDetectionRequest(serviceId, qapilotDir);
+    public String startCodeChangeDetection(
+            String serviceId,
+            String qapilotDir,
+            String repoUrl,
+            String repoToken,
+            String repoBranch
+    ) {
+        CodeChangeDetectionRequest request = new CodeChangeDetectionRequest(
+                serviceId, qapilotDir, repoUrl, repoToken, repoBranch
+        );
         return extractTraceId(post("/api/agent/code-change-detection", request));
     }
 

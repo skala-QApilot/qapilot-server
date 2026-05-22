@@ -37,14 +37,23 @@ public class AgentExecutionService {
                 request.userInput(),
                 request.scenarioIds(),
                 request.filter(),
-                request.tags()
+                request.tags(),
+                service.repoUrl(),
+                service.repoToken(),
+                service.repoBranch()
         );
         return AgentStartResponse.running(traceId);
     }
 
     public AgentStartResponse startCodeChangeDetection(String serviceId) {
         QapilotService service = serviceDomainService.getById(serviceId);
-        String traceId = fastApiAgentClient.startCodeChangeDetection(service.serviceId(), service.qapilotDir());
+        String traceId = fastApiAgentClient.startCodeChangeDetection(
+                service.serviceId(),
+                service.qapilotDir(),
+                service.repoUrl(),
+                service.repoToken(),
+                service.repoBranch()
+        );
         return AgentStartResponse.running(traceId);
     }
 
