@@ -43,7 +43,8 @@ public class RunService {
                 service.qapilotDir(),
                 request.scenarioIds(),
                 request.filter() == null || request.filter().isBlank() ? "all" : request.filter(),
-                request.tags()
+                request.tags(),
+                service.stagingUrl()
         );
         return RunResponse.running(traceId);
     }

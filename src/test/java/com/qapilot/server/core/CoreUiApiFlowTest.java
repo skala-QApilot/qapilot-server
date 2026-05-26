@@ -71,7 +71,7 @@ class CoreUiApiFlowTest {
 
         writeTrace(qapilotDir, "TRACE-001", "completed");
         writeTrace(qapilotDir, "TRACE-002", "running");
-        when(fastApiAgentClient.startTestRun(serviceId, qapilotDir.toString(), List.of("TS-001"), "all", null))
+        when(fastApiAgentClient.startTestRun(serviceId, qapilotDir.toString(), List.of("TS-001"), "all", null, null))
                 .thenReturn("TRACE-002");
 
         mockMvc.perform(post("/api/services/" + serviceId + "/runs")
