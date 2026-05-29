@@ -108,6 +108,22 @@ public class FastApiAgentClient {
         }
     }
 
+    /** 진행 중인 파이프라인 즉시 중단 — trace.status → "aborted". */
+    public Map<String, Object> stopRun(String traceId, String qapilotDir) {
+        try {
+            return webClient.post()
+                    .uri(uriBuilder -> uriBuilder.path("/api/agent/runs/{traceId}/stop")
+                            .queryParam("qapilot_dir", qapilotDir)
+                            .build(traceId))
+                    .headers(this::internalHeaders)
+                    .retrieve()
+                    .bodyToMono(mapType())
+                    .block();
+        } catch (Exception e) {
+            throw mapAgentException(e, "FastAPI run stop 요청에 실패했습니다.");
+        }
+    }
+
     /** 가장 최근 캡쳐된 PNG 스크린샷 raw bytes. 결과 없으면 null. */
     public byte[] latestScreenshot(String traceId, String qapilotDir) {
         try {

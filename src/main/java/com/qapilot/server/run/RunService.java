@@ -98,6 +98,19 @@ public class RunService {
         return fastApiAgentClient.latestScreenshot(runId, service.qapilotDir());
     }
 
+    /** 진행 중인 파이프라인을 즉시 중단 — trace.status → "aborted". */
+    public Map<String, Object> stop(String serviceId, String runId) {
+        QapilotService service = serviceDomainService.getById(serviceId);
+        Map<String, Object> response = fastApiAgentClient.stopRun(runId, service.qapilotDir());
+        Object data = response == null ? null : response.get("data");
+        if (data instanceof Map<?, ?> dataMap) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = (Map<String, Object>) dataMap;
+            return result;
+        }
+        return Map.of("trace_id", runId, "status", "unknown");
+    }
+
     private Map<String, Object> trace(String serviceId, String traceId) {
         QapilotService service = serviceDomainService.getById(serviceId);
         return traceFileStore.findById(Path.of(service.qapilotDir()), traceId)

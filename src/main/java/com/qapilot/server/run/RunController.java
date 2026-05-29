@@ -79,4 +79,10 @@ public class RunController {
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
+
+    /** 진행 중인 파이프라인 중단 — UI "정지" 버튼이 호출. trace.status → "aborted". */
+    @PostMapping("/{runId}/stop")
+    public ApiResponse<Map<String, Object>> stop(@PathVariable String serviceId, @PathVariable String runId) {
+        return ApiResponse.ok(runService.stop(serviceId, runId));
+    }
 }
