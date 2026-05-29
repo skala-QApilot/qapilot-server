@@ -91,6 +91,42 @@ public class FastApiAgentClient {
         }
     }
 
+    /** Layer 2 진행 상황 (디스크 results 디렉토리 스캔 결과). */
+    public Map<String, Object> runProgress(String traceId, String qapilotDir) {
+        try {
+            return webClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/agent/runs/{traceId}/progress")
+                            .queryParam("qapilot_dir", qapilotDir)
+                            .build(traceId))
+                    .headers(this::internalHeaders)
+                    .retrieve()
+                    .bodyToMono(mapType())
+                    .block();
+        } catch (Exception e) {
+            throw mapAgentException(e, "FastAPI run progress 조회에 실패했습니다.");
+        }
+    }
+
+    /** 가장 최근 캡쳐된 PNG 스크린샷 raw bytes. 결과 없으면 null. */
+    public byte[] latestScreenshot(String traceId, String qapilotDir) {
+        try {
+            return webClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/agent/runs/{traceId}/screenshot/latest")
+                            .queryParam("qapilot_dir", qapilotDir)
+                            .build(traceId))
+                    .headers(this::internalHeaders)
+                    .exchangeToMono(resp -> {
+                        if (resp.statusCode().value() == 204) {
+                            return reactor.core.publisher.Mono.empty();
+                        }
+                        return resp.bodyToMono(byte[].class);
+                    })
+                    .block();
+        } catch (Exception e) {
+            throw mapAgentException(e, "FastAPI 스크린샷 조회에 실패했습니다.");
+        }
+    }
+
     private Map<String, Object> post(String uri, Object body) {
         try {
             return webClient.post()

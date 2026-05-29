@@ -56,7 +56,8 @@ public class ResultQueryService {
     public ResultStatisticsResponse statistics(String serviceId) {
         List<ResultResponse> results = allResults(serviceId);
         int passed = (int) results.stream().filter(result -> "completed".equals(result.status())).count();
-        int failed = (int) results.stream().filter(result -> "failed".equals(result.status())).count();
+        // "aborted": 파이프라인이 비정상 종료(예외/Ctrl+C 등). TC-level "failed" 와 다른 축.
+        int failed = (int) results.stream().filter(result -> "aborted".equals(result.status())).count();
         Double passRate = results.isEmpty() ? null : (passed * 100.0) / results.size();
         return new ResultStatisticsResponse(results.size(), passed, failed, passRate);
     }

@@ -56,6 +56,14 @@ public class RunService {
                 .toList();
     }
 
+    /** 모든 trace (running + completed) — 새로고침 후 이력 복원용. */
+    public List<RunResponse> list(String serviceId) {
+        return traces(serviceId).stream()
+                .filter(trace -> "test".equals(trace.get("command")))
+                .map(RunResponse::fromTrace)
+                .toList();
+    }
+
     public RunResponse get(String serviceId, String runId) {
         return RunResponse.fromTrace(traceWithPolling(serviceId, runId));
     }
@@ -69,6 +77,24 @@ public class RunService {
                 "hitl_pending", 0,
                 "status", trace.getOrDefault("status", "unknown")
         );
+    }
+
+    /** Layer 2 디스크 results 스캔 결과. UI 의 1초 폴링이 호출. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> runProgress(String serviceId, String runId) {
+        QapilotService service = serviceDomainService.getById(serviceId);
+        Map<String, Object> response = fastApiAgentClient.runProgress(runId, service.qapilotDir());
+        Object data = response == null ? null : response.get("data");
+        if (data instanceof Map<?, ?> dataMap) {
+            return (Map<String, Object>) dataMap;
+        }
+        return Map.of("trace_id", runId, "items", List.of(), "count", 0);
+    }
+
+    /** 가장 최근 PNG 스크린샷 bytes. 없으면 null. */
+    public byte[] latestScreenshot(String serviceId, String runId) {
+        QapilotService service = serviceDomainService.getById(serviceId);
+        return fastApiAgentClient.latestScreenshot(runId, service.qapilotDir());
     }
 
     private Map<String, Object> trace(String serviceId, String traceId) {
