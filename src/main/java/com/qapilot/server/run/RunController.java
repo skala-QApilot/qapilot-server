@@ -85,4 +85,10 @@ public class RunController {
     public ApiResponse<Map<String, Object>> stop(@PathVariable String serviceId, @PathVariable String runId) {
         return ApiResponse.ok(runService.stop(serviceId, runId));
     }
+
+    /** 중단된 trace 를 같은 trace_id 로 재개 — UI "이어서 실행" 버튼이 호출. */
+    @PostMapping("/{runId}/resume")
+    public ApiResponse<Map<String, Object>> resume(@PathVariable String serviceId, @PathVariable String runId) {
+        return ApiResponse.ok(runService.resume(serviceId, runId));
+    }
 }

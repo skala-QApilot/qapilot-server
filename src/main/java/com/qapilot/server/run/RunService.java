@@ -98,6 +98,18 @@ public class RunService {
         return fastApiAgentClient.latestScreenshot(runId, service.qapilotDir());
     }
 
+    /** 중단된 trace 를 같은 trace_id 로 재개 — 새 trace 만들지 않음. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> resume(String serviceId, String runId) {
+        QapilotService service = serviceDomainService.getById(serviceId);
+        Map<String, Object> response = fastApiAgentClient.resumeRun(runId, service.qapilotDir());
+        Object data = response == null ? null : response.get("data");
+        if (data instanceof Map<?, ?> dataMap) {
+            return (Map<String, Object>) dataMap;
+        }
+        return Map.of("trace_id", runId, "status", "unknown");
+    }
+
     /** 진행 중인 파이프라인을 즉시 중단 — trace.status → "aborted". */
     public Map<String, Object> stop(String serviceId, String runId) {
         QapilotService service = serviceDomainService.getById(serviceId);

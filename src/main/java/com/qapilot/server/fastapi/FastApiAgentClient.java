@@ -108,6 +108,22 @@ public class FastApiAgentClient {
         }
     }
 
+    /** 중단된 trace 를 같은 trace_id 로 재개 — 새 trace 만들지 않음. */
+    public Map<String, Object> resumeRun(String traceId, String qapilotDir) {
+        try {
+            return webClient.post()
+                    .uri(uriBuilder -> uriBuilder.path("/api/agent/runs/{traceId}/resume")
+                            .queryParam("qapilot_dir", qapilotDir)
+                            .build(traceId))
+                    .headers(this::internalHeaders)
+                    .retrieve()
+                    .bodyToMono(mapType())
+                    .block();
+        } catch (Exception e) {
+            throw mapAgentException(e, "FastAPI run resume 요청에 실패했습니다.");
+        }
+    }
+
     /** 진행 중인 파이프라인 즉시 중단 — trace.status → "aborted". */
     public Map<String, Object> stopRun(String traceId, String qapilotDir) {
         try {

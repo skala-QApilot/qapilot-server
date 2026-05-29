@@ -40,7 +40,12 @@ public record ResultResponse(
                 else if ("failed".equals(s)) failCount++;
             }
         }
-        int totalTcCount = tcResults instanceof Map<?, ?> tcMap2 ? tcMap2.size() : 0;
+        // total_tc_count = "사용자가 선택한 시나리오들의 전체 TC 수" — pipeline 의 _load_scenarios_for_test
+        // 가 trace.json 에 selected_total_tc_count 로 박아둠. 옛 trace 호환을 위해 tc_results.size() fallback.
+        Object selectedTotal = trace.get("selected_total_tc_count");
+        int totalTcCount = selectedTotal instanceof Number numTotal
+                ? numTotal.intValue()
+                : (tcResults instanceof Map<?, ?> tcMap2 ? tcMap2.size() : 0);
         return new ResultResponse(
                 stringValue(trace.get("trace_id")),
                 stringValue(trace.get("command")),

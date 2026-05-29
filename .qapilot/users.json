@@ -1,0 +1,15 @@
+[ {
+  "userId" : "640add97-a1f6-46a4-a3d4-40db4badfb6d",
+  "email" : "test@test.com",
+  "hashedPassword" : "$2a$10$.youSIFWBye82InhaywuM.aer562mFoYQ0cmf4bBpFLb3/kXOsnM.",
+  "name" : "이히히",
+  "role" : "admin",
+  "createdAt" : "2026-05-29T05:19:32.990413Z"
+}, {
+  "userId" : "2a53d288-3efb-4e3b-93dd-9355b3844a6e",
+  "email" : "admin@qapilot.com",
+  "hashedPassword" : "$2a$10$9RHBqyJfQ4McbvPAhtfRp.0jO0HxAIV.Vf4OfyyoKQ.rX9A7L9aqC",
+  "name" : "테스트 관리자",
+  "role" : "admin",
+  "createdAt" : "2026-05-29T05:21:05.543283Z"
+} ]
