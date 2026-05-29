@@ -44,7 +44,8 @@ public class RunService {
                 request.scenarioIds(),
                 request.filter() == null || request.filter().isBlank() ? "all" : request.filter(),
                 request.tags(),
-                service.stagingUrl()
+                service.stagingUrl(),
+                request.resumeFromTrace()
         );
         return RunResponse.running(traceId);
     }

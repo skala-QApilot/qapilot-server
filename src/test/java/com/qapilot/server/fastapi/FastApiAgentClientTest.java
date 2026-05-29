@@ -27,7 +27,7 @@ class FastApiAgentClientTest {
         );
         FastApiAgentClient client = new FastApiAgentClient(WebClient.builder(), properties);
 
-        assertThatThrownBy(() -> client.startTestRun("service-id", "/tmp/.qapilot", List.of(), "all", null, null))
+        assertThatThrownBy(() -> client.startTestRun("service-id", "/tmp/.qapilot", List.of(), "all", null, null, null))
                 .isInstanceOf(QapilotException.class)
                 .satisfies(error -> assertThat(((QapilotException) error).errorCode()).isEqualTo(ErrorCode.AGENT_002));
     }

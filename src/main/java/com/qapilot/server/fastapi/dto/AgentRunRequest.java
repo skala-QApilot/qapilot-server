@@ -17,6 +17,7 @@ public record AgentRunRequest(
         @JsonProperty("scenario_ids") List<String> scenarioIds,
         String filter,
         List<String> tags,
-        @JsonProperty("staging_url") String stagingUrl
+        @JsonProperty("staging_url") String stagingUrl,
+        @JsonProperty("resume_from_trace") String resumeFromTrace
 ) {
 }

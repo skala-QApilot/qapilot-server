@@ -39,9 +39,10 @@ public class FastApiAgentClient {
             List<String> scenarioIds,
             String filter,
             List<String> tags,
-            String stagingUrl
+            String stagingUrl,
+            String resumeFromTrace
     ) {
-        AgentRunRequest request = new AgentRunRequest(serviceId, qapilotDir, scenarioIds, filter, tags, stagingUrl);
+        AgentRunRequest request = new AgentRunRequest(serviceId, qapilotDir, scenarioIds, filter, tags, stagingUrl, resumeFromTrace);
         Map<String, Object> response = post("/api/agent/test-run", request);
         return extractTraceId(response);
     }
