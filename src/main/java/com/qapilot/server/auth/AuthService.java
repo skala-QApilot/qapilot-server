@@ -8,12 +8,15 @@ import com.qapilot.server.auth.dto.LogoutRequest;
 import com.qapilot.server.auth.dto.RefreshRequest;
 import com.qapilot.server.auth.dto.RegisterRequest;
 import com.qapilot.server.auth.dto.UserResponse;
+import com.qapilot.server.auth.persistence.UserEntity;
+import com.qapilot.server.auth.persistence.UserRepository;
 import com.qapilot.server.auth.security.JwtClaims;
 import com.qapilot.server.auth.security.JwtTokenProvider;
 import com.qapilot.server.auth.store.RevokedRefreshTokenStore;
 import com.qapilot.server.auth.store.UserFileStore;
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
+import com.qapilot.server.organization.OrganizationService;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.ServiceMember;
 import com.qapilot.server.service.domain.QapilotService;
@@ -22,6 +25,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -34,12 +39,16 @@ import org.springframework.stereotype.Service;
 @Service
 public class AuthService {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
     private final UserFileStore userFileStore;
     private final MemberFileStore memberFileStore;
     private final ServiceDomainService serviceDomainService;
     private final RevokedRefreshTokenStore revokedRefreshTokenStore;
     private final JwtTokenProvider tokenProvider;
     private final PasswordEncoder passwordEncoder;
+    private final UserRepository userRepository;
+    private final OrganizationService organizationService;
 
     public AuthService(
             UserFileStore userFileStore,
@@ -47,7 +56,9 @@ public class AuthService {
             ServiceDomainService serviceDomainService,
             RevokedRefreshTokenStore revokedRefreshTokenStore,
             JwtTokenProvider tokenProvider,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            UserRepository userRepository,
+            OrganizationService organizationService
     ) {
         this.userFileStore = userFileStore;
         this.memberFileStore = memberFileStore;
@@ -55,6 +66,8 @@ public class AuthService {
         this.revokedRefreshTokenStore = revokedRefreshTokenStore;
         this.tokenProvider = tokenProvider;
         this.passwordEncoder = passwordEncoder;
+        this.userRepository = userRepository;
+        this.organizationService = organizationService;
     }
 
     public AuthResponse register(RegisterRequest request) {
@@ -114,7 +127,23 @@ public class AuthService {
         List<UserAccount> updated = new ArrayList<>(users);
         updated.add(user);
         userFileStore.saveUsers(updated);
+        mirrorUserToDb(user);
+        organizationService.createPersonalOrg(UUID.fromString(user.userId()), user.name());
         return user;
+    }
+
+    /** users.json 과 동일한 user 를 DB 에도 복제 — dual-write 단계용. 실패 시 회원가입 자체는 성공으로 본다. */
+    private void mirrorUserToDb(UserAccount user) {
+        try {
+            UserEntity entity = new UserEntity();
+            entity.setId(UUID.fromString(user.userId()));
+            entity.setEmail(user.email());
+            entity.setHashedPassword(user.hashedPassword());
+            entity.setName(user.name());
+            userRepository.save(entity);
+        } catch (Exception e) {
+            log.warn("user DB mirror 실패 (file 기록은 성공) userId={} error={}", user.userId(), e.getMessage());
+        }
     }
 
     private void addMember(String serviceId, String userId, String role) {
