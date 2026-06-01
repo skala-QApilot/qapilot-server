@@ -4,6 +4,8 @@ import com.qapilot.server.common.config.QapilotProperties;
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.common.files.QapilotPathResolver;
+import com.qapilot.server.organization.OrganizationService;
+import com.qapilot.server.organization.domain.Organization;
 import com.qapilot.server.service.domain.QapilotService;
 import com.qapilot.server.service.domain.RepoConfig;
 import com.qapilot.server.service.dto.CredentialsResponse;
@@ -13,6 +15,10 @@ import com.qapilot.server.service.dto.ServiceCreateRequest;
 import com.qapilot.server.service.dto.ServiceResponse;
 import com.qapilot.server.service.dto.ServiceSetupRequest;
 import com.qapilot.server.service.dto.ServiceUpdateRequest;
+import com.qapilot.server.service.persistence.ServiceEntity;
+import com.qapilot.server.service.persistence.ServiceJpaRepository;
+import com.qapilot.server.service.persistence.ServiceRepoEntity;
+import com.qapilot.server.service.persistence.ServiceRepoJpaRepository;
 import com.qapilot.server.service.store.ServiceFileStore;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,6 +28,8 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -33,6 +41,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class ServiceDomainService {
 
+    private static final Logger log = LoggerFactory.getLogger(ServiceDomainService.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final List<String> REQUIRED_DIRS = List.of(
             "auth", "cache", "codebase-index", "domain", "evidence",
@@ -43,24 +52,33 @@ public class ServiceDomainService {
     private final ServiceSlugGenerator slugGenerator;
     private final QapilotPathResolver pathResolver;
     private final QapilotProperties properties;
+    private final ServiceJpaRepository serviceJpaRepository;
+    private final ServiceRepoJpaRepository serviceRepoJpaRepository;
+    private final OrganizationService organizationService;
 
     public ServiceDomainService(
             ServiceFileStore serviceFileStore,
             ServiceSlugGenerator slugGenerator,
             QapilotPathResolver pathResolver,
-            QapilotProperties properties
+            QapilotProperties properties,
+            ServiceJpaRepository serviceJpaRepository,
+            ServiceRepoJpaRepository serviceRepoJpaRepository,
+            OrganizationService organizationService
     ) {
         this.serviceFileStore = serviceFileStore;
         this.slugGenerator = slugGenerator;
         this.pathResolver = pathResolver;
         this.properties = properties;
+        this.serviceJpaRepository = serviceJpaRepository;
+        this.serviceRepoJpaRepository = serviceRepoJpaRepository;
+        this.organizationService = organizationService;
     }
 
     public List<ServiceResponse> listServices() {
         return serviceFileStore.loadServices().stream().map(ServiceResponse::from).toList();
     }
 
-    public QapilotService create(ServiceCreateRequest request) {
+    public QapilotService create(ServiceCreateRequest request, UUID userId) {
         String name = requiredName(request.name());
         Path targetRoot = targetRoot(request.targetRoot());
         if (!Files.exists(targetRoot) || !Files.isDirectory(targetRoot)) {
@@ -95,7 +113,60 @@ public class ServiceDomainService {
         );
         services.add(service);
         serviceFileStore.saveServices(services);
+        mirrorServiceToDb(service, userId);
         return service;
+    }
+
+    /** services.json 과 동일한 서비스를 DB 에도 복제 — dual-write. 실패 시 file 기록 우선, warn 로깅. */
+    private void mirrorServiceToDb(QapilotService service, UUID userId) {
+        try {
+            UUID orgId = resolvePersonalOrgId(userId);
+            if (orgId == null) {
+                log.warn("service DB mirror 스킵 — userId={} 의 personal org 를 찾을 수 없음", userId);
+                return;
+            }
+
+            ServiceEntity entity = new ServiceEntity();
+            entity.setId(UUID.fromString(service.serviceId()));
+            entity.setOrgId(orgId);
+            entity.setSlug(service.projectSlug());
+            entity.setDisplayName(service.displayName());
+            entity.setDescription(service.description());
+            entity.setTargetRoot(service.targetRoot());
+            entity.setQapilotDir(service.qapilotDir());
+            entity.setDashboardUrl(service.dashboardUrl());
+            entity.setServerAuthToken(service.serverAuthToken());
+            entity.setTokenIssuedAt(Instant.parse(service.tokenIssuedAt()));
+            if (service.tokenExpiresAt() != null) {
+                entity.setTokenExpiresAt(Instant.parse(service.tokenExpiresAt()));
+            }
+            entity.setStagingUrl(service.stagingUrl());
+            serviceJpaRepository.save(entity);
+
+            List<RepoConfig> repos = service.repos();
+            if (repos != null) {
+                int position = 0;
+                for (RepoConfig repo : repos) {
+                    ServiceRepoEntity repoEntity = new ServiceRepoEntity();
+                    repoEntity.setId(UUID.randomUUID());
+                    repoEntity.setServiceId(entity.getId());
+                    repoEntity.setRepoUrl(repo.repoUrl());
+                    repoEntity.setBranch(repo.branch());
+                    repoEntity.setRole(repo.role());
+                    repoEntity.setToken(repo.token());
+                    repoEntity.setPosition(position++);
+                    serviceRepoJpaRepository.save(repoEntity);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("service DB mirror 실패 (file 기록은 성공) serviceId={} error={}",
+                    service.serviceId(), e.getMessage());
+        }
+    }
+
+    private UUID resolvePersonalOrgId(UUID userId) {
+        List<Organization> orgs = organizationService.listForUser(userId);
+        return orgs.isEmpty() ? null : orgs.get(0).getId();
     }
 
     private static String nullIfBlank(String value) {
