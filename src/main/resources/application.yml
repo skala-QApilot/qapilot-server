@@ -22,6 +22,15 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+aws:
+  s3:
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    region: ${S3_REGION:us-east-1}
+    bucket: ${S3_BUCKET:qapilot-local}
+    access-key: ${S3_ACCESS_KEY:minioadmin}
+    secret-key: ${S3_SECRET_KEY:minioadmin}
+    path-style-access: ${S3_PATH_STYLE_ACCESS:true}
+
 qapilot:
   storage:
     default-target-root: ${QAPILOT_TARGET_ROOT:.}
