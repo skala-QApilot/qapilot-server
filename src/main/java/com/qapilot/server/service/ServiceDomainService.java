@@ -70,7 +70,11 @@ public class ServiceDomainService {
         List<QapilotService> services = serviceFileStore.loadServices();
         String now = now();
         String slug = slugGenerator.generate(name, services);
-        Path qapilotDir = pathResolver.qapilotDir(targetRoot);
+        // 서비스별 격리된 qapilot_dir — `<targetRoot>/.qapilot/<slug>`. 같은 target_root 안에서
+        // 여러 서비스의 시나리오/trace/결과/RTM 이 디렉토리 단위로 분리된다.
+        // services.json, users.json, auth/ 같은 전역 파일은 root .qapilot 에 그대로 둔다
+        // (ServiceFileStore / MemberFileStore 가 pathResolver.qapilotDir() — 인자 없는 오버로드 사용).
+        Path qapilotDir = pathResolver.qapilotDir(targetRoot, slug);
         createRequiredDirs(qapilotDir);
 
         QapilotService service = new QapilotService(

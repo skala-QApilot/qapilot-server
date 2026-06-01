@@ -8,11 +8,15 @@ import com.qapilot.server.rtm.domain.RtmRequirement;
 import com.qapilot.server.rtm.domain.RtmSummary;
 import com.qapilot.server.rtm.domain.RtmVersion;
 import com.qapilot.server.rtm.dto.CreateRtmVersionRequest;
+import com.qapilot.server.scenario.ScenarioStatusAggregator;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.QapilotService;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -28,15 +32,23 @@ public class RtmService {
     private final ServiceDomainService serviceDomainService;
     private final RtmFileStore rtmFileStore;
     private final ObjectMapper objectMapper;
+    private final ScenarioStatusAggregator scenarioStatusAggregator;
 
-    public RtmService(ServiceDomainService serviceDomainService, RtmFileStore rtmFileStore, ObjectMapper objectMapper) {
+    public RtmService(ServiceDomainService serviceDomainService, RtmFileStore rtmFileStore,
+                      ObjectMapper objectMapper, ScenarioStatusAggregator scenarioStatusAggregator) {
         this.serviceDomainService = serviceDomainService;
         this.rtmFileStore = rtmFileStore;
         this.objectMapper = objectMapper;
+        this.scenarioStatusAggregator = scenarioStatusAggregator;
     }
 
     public List<RtmVersion> list(String serviceId) {
-        return rtmFileStore.listAll(qapilotDir(serviceId));
+        Path qapilotDir = qapilotDir(serviceId);
+        Map<String, ScenarioStatusAggregator.RunStatus> tcStatuses =
+                scenarioStatusAggregator.testCaseStatuses(qapilotDir);
+        return rtmFileStore.listAll(qapilotDir).stream()
+                .map(version -> enrichVersion(version, tcStatuses))
+                .toList();
     }
 
     public RtmVersion create(String serviceId, CreateRtmVersionRequest request) {
@@ -59,11 +71,13 @@ public class RtmService {
     }
 
     public RtmVersion get(String serviceId, String rtmVersionId) {
-        return rtmFileStore.load(qapilotDir(serviceId), rtmVersionId);
+        Path qapilotDir = qapilotDir(serviceId);
+        RtmVersion version = rtmFileStore.load(qapilotDir, rtmVersionId);
+        return enrichVersion(version, scenarioStatusAggregator.testCaseStatuses(qapilotDir));
     }
 
     public List<RtmRequirement> getRequirements(String serviceId, String rtmVersionId) {
-        return rtmFileStore.load(qapilotDir(serviceId), rtmVersionId).requirements();
+        return get(serviceId, rtmVersionId).requirements();
     }
 
     public RtmRequirement getRequirement(String serviceId, String rtmVersionId, String frId) {
@@ -79,6 +93,80 @@ public class RtmService {
         } catch (JsonProcessingException e) {
             throw new QapilotException(ErrorCode.FILE_001, "RTM을 직렬화할 수 없습니다.");
         }
+    }
+
+    /**
+     * 저장된 RTM 버전에 동적 status/passCount/totalCount/history 채워준다.
+     *
+     * <p>각 FR 의 linkedTcIds 를 순회하며 ScenarioStatusAggregator 의 testCaseStatuses 결과
+     * (= TC 별 최신 trace status) 로 집계. 같은 TC 가 여러 trace 에 등장해도 aggregator 가
+     * 최신 1개 status 만 반환하므로 자연스럽게 "TC 단위 1회 카운트".
+     *
+     * <p>판정 기준:
+     * <ul>
+     *   <li>"충족" — 연결된 모든 TC 가 passed</li>
+     *   <li>"미충족" — 하나라도 failed</li>
+     *   <li>"미측정" — 연결된 TC 중 실행된 게 하나도 없음 (또는 linkedTcIds 비어있음)</li>
+     * </ul>
+     */
+    private RtmVersion enrichVersion(RtmVersion version, Map<String, ScenarioStatusAggregator.RunStatus> tcStatuses) {
+        List<RtmRequirement> enrichedReqs = new ArrayList<>();
+        int satisfied = 0;
+        int unsatisfied = 0;
+        int unmeasured = 0;
+        for (RtmRequirement req : version.requirements()) {
+            List<String> linked = req.linkedTcIds() == null ? List.of() : req.linkedTcIds();
+            int pass = 0;
+            int fail = 0;
+            int measured = 0;
+            List<Map<String, Object>> history = new ArrayList<>();
+            for (String tcId : linked) {
+                ScenarioStatusAggregator.RunStatus runStatus = tcStatuses.get(tcId);
+                if (runStatus == null) continue;
+                measured++;
+                if ("passed".equals(runStatus.status())) {
+                    pass++;
+                } else if ("failed".equals(runStatus.status())) {
+                    fail++;
+                }
+                String tsId = tcId.contains("-TC-") ? tcId.substring(0, tcId.indexOf("-TC-")) : "";
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("ts", tsId);
+                row.put("tc", tcId);
+                row.put("date", runStatus.at() == null ? "" : runStatus.at());
+                row.put("pass", "passed".equals(runStatus.status()));
+                history.add(row);
+            }
+            String status;
+            if (measured == 0) {
+                status = "미측정";
+                unmeasured++;
+            } else if (fail > 0) {
+                status = "미충족";
+                unsatisfied++;
+            } else if (pass == linked.size() && pass > 0) {
+                status = "충족";
+                satisfied++;
+            } else {
+                // 일부만 측정됐고 fail 없음 — 부분 측정, 보수적으로 미측정 카운트.
+                status = "미측정";
+                unmeasured++;
+            }
+            enrichedReqs.add(new RtmRequirement(
+                    req.frId(), req.content(), status, pass, linked.size(), history, linked
+            ));
+        }
+        return new RtmVersion(
+                version.rtmVersionId(),
+                version.serviceId(),
+                version.label(),
+                version.traceId(),
+                enrichedReqs,
+                new com.qapilot.server.rtm.domain.RtmSummary(
+                        enrichedReqs.size(), satisfied, unsatisfied, unmeasured
+                ),
+                version.createdAt()
+        );
     }
 
     private Path qapilotDir(String serviceId) {

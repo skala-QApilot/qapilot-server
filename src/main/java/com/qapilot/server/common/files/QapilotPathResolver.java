@@ -25,12 +25,28 @@ public class QapilotPathResolver {
         return Path.of(properties.storage().defaultTargetRoot()).toAbsolutePath().normalize();
     }
 
+    /** 전역 .qapilot 경로 (services.json / users.json / auth/ 보관). */
     public Path qapilotDir() {
         return qapilotDir(defaultTargetRoot());
     }
 
+    /** 전역 .qapilot — root .qapilot 디렉토리 (slug 미지정). */
     public Path qapilotDir(Path targetRoot) {
         return targetRoot.toAbsolutePath().normalize().resolve(".qapilot");
+    }
+
+    /**
+     * 서비스별 격리된 디렉토리 — `<root>/.qapilot/<slug>`.
+     *
+     * <p>같은 target_root 안에서 여러 서비스가 동시에 시나리오/trace/결과/RTM 등을
+     * 보관하더라도 디렉토리가 분리되어 데이터가 섞이지 않도록 한다.
+     * services.json, users.json, auth/ 는 전역 (qapilotDir(targetRoot)) 에 그대로 둔다.
+     */
+    public Path qapilotDir(Path targetRoot, String slug) {
+        if (slug == null || slug.isBlank()) {
+            return qapilotDir(targetRoot);
+        }
+        return qapilotDir(targetRoot).resolve(slug);
     }
 
     public Path requireExistingQapilotDir(Path targetRoot) {
