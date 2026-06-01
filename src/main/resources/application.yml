@@ -6,6 +6,21 @@ server:
 spring:
   application:
     name: qapilot-server
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/qapilot}
+    username: ${POSTGRES_USER:qapilot}
+    password: ${POSTGRES_PASSWORD:qapilot}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate     # Flyway 가 스키마 소유자. JPA 는 매핑 검증만.
+    open-in-view: false
+    properties:
+      "[hibernate.jdbc.time_zone]": UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
 qapilot:
   storage:
