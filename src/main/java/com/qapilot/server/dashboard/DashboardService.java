@@ -3,7 +3,7 @@ package com.qapilot.server.dashboard;
 import com.qapilot.server.dashboard.dto.DashboardSummaryResponse;
 import com.qapilot.server.run.RunReader;
 import com.qapilot.server.run.dto.RunResponse;
-import com.qapilot.server.scenario.store.ScenarioFileStore;
+import com.qapilot.server.scenario.ScenarioReader;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.QapilotService;
 import java.nio.file.Files;
@@ -22,16 +22,16 @@ import org.springframework.stereotype.Service;
 public class DashboardService {
 
     private final ServiceDomainService serviceDomainService;
-    private final ScenarioFileStore scenarioFileStore;
+    private final ScenarioReader scenarioReader;
     private final RunReader runReader;
 
     public DashboardService(
             ServiceDomainService serviceDomainService,
-            ScenarioFileStore scenarioFileStore,
+            ScenarioReader scenarioReader,
             RunReader runReader
     ) {
         this.serviceDomainService = serviceDomainService;
-        this.scenarioFileStore = scenarioFileStore;
+        this.scenarioReader = scenarioReader;
         this.runReader = runReader;
     }
 
@@ -41,7 +41,7 @@ public class DashboardService {
         List<Map<String, Object>> traces = runReader.listByServiceId(service.serviceId());
         List<RunResponse> recentRuns = traces.stream().limit(5).map(RunResponse::fromTrace).toList();
         return new DashboardSummaryResponse(
-                scenarioFileStore.listAll(qapilotDir).size(),  // scenario read 는 PR-15d
+                scenarioReader.listByServiceId(serviceId).size(),
                 recentRuns,
                 domainFiles(qapilotDir),
                 null,

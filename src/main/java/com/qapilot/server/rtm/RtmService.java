@@ -30,16 +30,14 @@ import org.springframework.stereotype.Service;
 public class RtmService {
 
     private final ServiceDomainService serviceDomainService;
-    private final RtmFileStore rtmFileStore;          // 잔존 — create 의 file 쓰기 (PR-15g 정리)
-    private final RtmReader rtmReader;                // PR-15e — 모든 read 의 single source
+    private final RtmReader rtmReader;
     private final ObjectMapper objectMapper;
     private final ScenarioStatusAggregator scenarioStatusAggregator;
 
-    public RtmService(ServiceDomainService serviceDomainService, RtmFileStore rtmFileStore,
+    public RtmService(ServiceDomainService serviceDomainService,
                       RtmReader rtmReader, ObjectMapper objectMapper,
                       ScenarioStatusAggregator scenarioStatusAggregator) {
         this.serviceDomainService = serviceDomainService;
-        this.rtmFileStore = rtmFileStore;
         this.rtmReader = rtmReader;
         this.objectMapper = objectMapper;
         this.scenarioStatusAggregator = scenarioStatusAggregator;
@@ -55,23 +53,14 @@ public class RtmService {
                 .toList();
     }
 
+    /**
+     * RTM 수동 생성은 PR-15h 에서 deprecated.
+     * RTM 은 FastAPI 파이프라인의 _write_initial_rtm_version 이 시나리오 생성 시 자동 발급.
+     * UI 가 수동 호출하는 케이스는 없어 410 Gone 으로 응답.
+     */
     public RtmVersion create(String serviceId, CreateRtmVersionRequest request) {
-        if (request.label() == null || request.label().isBlank()) {
-            throw new QapilotException(ErrorCode.COMMON_001, "label 필드가 필요합니다.");
-        }
-        List<RtmRequirement> requirements = request.requirements() == null ? List.of() : request.requirements();
-        RtmSummary summary = RtmSummary.from(requirements);
-        RtmVersion version = new RtmVersion(
-                UUID.randomUUID().toString(),
-                serviceId,
-                request.label(),
-                request.traceId(),
-                requirements,
-                summary,
-                Instant.now().toString()
-        );
-        rtmFileStore.save(qapilotDir(serviceId), version);
-        return version;
+        throw new QapilotException(ErrorCode.RTM_002,
+                "RTM 수동 생성은 deprecated 됨. 시나리오 생성 시 자동 발급.");
     }
 
     public RtmVersion get(String serviceId, String rtmVersionId) {

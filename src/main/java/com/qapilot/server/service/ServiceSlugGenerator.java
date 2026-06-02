@@ -30,7 +30,8 @@ public class ServiceSlugGenerator {
         return base + "-" + suffix;
     }
 
-    private String normalize(String name) {
+    /** DB 기반 slug 충돌 체크에서 재사용. */
+    public String normalize(String name) {
         String normalized = Normalizer.normalize(name == null ? "" : name, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
                 .toLowerCase(Locale.ROOT)

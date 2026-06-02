@@ -1,4 +1,4 @@
-package com.qapilot.server.auth.persistence;
+package com.qapilot.server.scenario.change.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,40 +13,45 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * users 테이블 JPA 엔티티 — 파일 기반 {@link com.qapilot.server.auth.domain.UserAccount} 와 dual-write.
+ * change_requests 테이블. PR-15h.
  *
  * <p>Author: C
- * <br>Created: 2026-06-01
+ * <br>Created: 2026-06-02
  */
 @Entity
-@Table(name = "users")
+@Table(name = "change_requests")
 @Getter
 @Setter
 @NoArgsConstructor
-public class UserEntity {
+public class ChangeRequestEntity {
 
     @Id
     private UUID id;
 
-    @Column(nullable = false, unique = true)
-    private String email;
+    @Column(name = "service_id", nullable = false)
+    private UUID serviceId;
 
-    @Column(name = "hashed_password")
-    private String hashedPassword;
+    @Column(name = "scenario_id")
+    private String scenarioId;
 
-    private String name;
+    @Column(columnDefinition = "text")
+    private String reason;
+
+    private String trigger;
 
     @Column(nullable = false)
-    private String role;
+    private String status;
+
+    private String reviewer;
+
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
-
-    @Column(name = "last_login_at")
-    private Instant lastLoginAt;
 
     @PrePersist
     void onCreate() {
@@ -55,6 +60,9 @@ public class UserEntity {
             createdAt = now;
         }
         updatedAt = now;
+        if (status == null || status.isBlank()) {
+            status = "pending";
+        }
     }
 
     @PreUpdate

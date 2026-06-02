@@ -1,9 +1,7 @@
 package com.qapilot.server.graph;
 
-import com.qapilot.server.scenario.store.ScenarioFileStore;
+import com.qapilot.server.scenario.ScenarioReader;
 import com.qapilot.server.service.ServiceDomainService;
-import com.qapilot.server.service.domain.QapilotService;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -14,24 +12,25 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
- * 시나리오 그래프/플로우 동적 생성 유스케이스.
+ * 시나리오 그래프/플로우 동적 생성 유스케이스. PR-15h — JPA only.
  *
  * <p>Author: C
- * <br>Created: 2026-05-18
+ * <br>Created: 2026-05-18, rewritten 2026-06-02
  */
 @Service
 public class GraphService {
 
+    @SuppressWarnings("unused")
     private final ServiceDomainService serviceDomainService;
-    private final ScenarioFileStore scenarioFileStore;
+    private final ScenarioReader scenarioReader;
 
-    public GraphService(ServiceDomainService serviceDomainService, ScenarioFileStore scenarioFileStore) {
+    public GraphService(ServiceDomainService serviceDomainService, ScenarioReader scenarioReader) {
         this.serviceDomainService = serviceDomainService;
-        this.scenarioFileStore = scenarioFileStore;
+        this.scenarioReader = scenarioReader;
     }
 
     public Map<String, Object> graph(String serviceId) {
-        List<Map<String, Object>> scenarios = scenarioFileStore.listAll(qapilotDir(serviceId));
+        List<Map<String, Object>> scenarios = scenarioReader.listByServiceId(serviceId);
 
         List<Map<String, Object>> nodes = scenarios.stream().map(s -> {
             List<?> testCases = asList(s.get("test_cases"));
@@ -42,7 +41,6 @@ public class GraphService {
             return node;
         }).toList();
 
-        // 동일 affected_file을 공유하는 시나리오 쌍에 edge 생성
         List<Map<String, Object>> edges = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (int i = 0; i < scenarios.size(); i++) {
@@ -65,7 +63,7 @@ public class GraphService {
     }
 
     public Map<String, Object> flow(String serviceId) {
-        List<Map<String, Object>> scenarios = scenarioFileStore.listAll(qapilotDir(serviceId));
+        List<Map<String, Object>> scenarios = scenarioReader.listByServiceId(serviceId);
 
         List<Map<String, Object>> flows = scenarios.stream().map(s -> {
             List<Map<String, Object>> steps = asList(s.get("test_cases")).stream()
@@ -105,10 +103,5 @@ public class GraphService {
             if (f != null) result.add(String.valueOf(f));
         }
         return result;
-    }
-
-    private Path qapilotDir(String serviceId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
-        return Path.of(service.qapilotDir());
     }
 }

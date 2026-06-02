@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 /**
  * rtm_versions + rtm_requirements + rtm_requirement_tc_links (DB) → RtmVersion 도메인 객체로 변환.
  *
- * <p>PR-15e — RtmFileStore.listAll/load 의 file read 를 DB read 로 대체.
+
  * status/passCount 등 동적 필드는 비워서 반환 (RtmService.enrichVersion 이 응답 시점 derive).
  *
  * <p>Author: C

@@ -2,7 +2,7 @@ package com.qapilot.server.scenario.version;
 
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
-import com.qapilot.server.scenario.store.ScenarioFileStore;
+import com.qapilot.server.scenario.ScenarioReader;
 import com.qapilot.server.scenario.version.domain.ScenarioVersion;
 import com.qapilot.server.scenario.version.dto.CreateScenarioVersionRequest;
 import com.qapilot.server.scenario.version.dto.UpdateScenarioVersionRequest;
@@ -29,16 +29,16 @@ public class ScenarioVersionService {
 
     private final ServiceDomainService serviceDomainService;
     private final ScenarioVersionFileStore versionFileStore;
-    private final ScenarioFileStore scenarioFileStore;
+    private final ScenarioReader scenarioReader;
 
     public ScenarioVersionService(
             ServiceDomainService serviceDomainService,
             ScenarioVersionFileStore versionFileStore,
-            ScenarioFileStore scenarioFileStore
+            ScenarioReader scenarioReader
     ) {
         this.serviceDomainService = serviceDomainService;
         this.versionFileStore = versionFileStore;
-        this.scenarioFileStore = scenarioFileStore;
+        this.scenarioReader = scenarioReader;
     }
 
     public List<ScenarioVersion> list(String serviceId) {
@@ -50,7 +50,7 @@ public class ScenarioVersionService {
             throw new QapilotException(ErrorCode.COMMON_001, "label 필드가 필요합니다.");
         }
         Path qapilotDir = qapilotDir(serviceId);
-        List<Map<String, Object>> snapshot = scenarioFileStore.listAll(qapilotDir);
+        List<Map<String, Object>> snapshot = scenarioReader.listByServiceId(serviceId);
         ScenarioVersion version = new ScenarioVersion(
                 UUID.randomUUID().toString(),
                 serviceId,
