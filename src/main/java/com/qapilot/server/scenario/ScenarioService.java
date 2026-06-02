@@ -27,18 +27,21 @@ public class ScenarioService {
     );
 
     private final ServiceDomainService serviceDomainService;
-    private final ScenarioFileStore scenarioFileStore;
+    private final ScenarioFileStore scenarioFileStore;       // 잔존 — create/update/delete 의 file 쓰기 (PR-15g 에서 정리)
+    private final ScenarioReader scenarioReader;             // PR-15d — 모든 read 의 single source
     private final ScenarioStatusAggregator statusAggregator;
     private final ScenarioPendingChangesResolver pendingChangesResolver;
 
     public ScenarioService(
             ServiceDomainService serviceDomainService,
             ScenarioFileStore scenarioFileStore,
+            ScenarioReader scenarioReader,
             ScenarioStatusAggregator statusAggregator,
             ScenarioPendingChangesResolver pendingChangesResolver
     ) {
         this.serviceDomainService = serviceDomainService;
         this.scenarioFileStore = scenarioFileStore;
+        this.scenarioReader = scenarioReader;
         this.statusAggregator = statusAggregator;
         this.pendingChangesResolver = pendingChangesResolver;
     }
@@ -50,7 +53,8 @@ public class ScenarioService {
         Set<String> pendingScenarioIds = pendingChangesResolver.scenariosWithPendingChanges(qapilotDir);
 
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Map<String, Object> scenario : scenarioFileStore.listAll(qapilotDir)) {
+        // PR-15d — file → DB read. ScenarioReader 가 scenarios + scenario_versions JOIN 후 current 버전 payload 반환.
+        for (Map<String, Object> scenario : scenarioReader.listByServiceId(serviceId)) {
             if (!matchesSearch(scenario, search)) continue;
             if (trigger != null && !trigger.isBlank() && !trigger.equals(scenario.get("trigger"))) continue;
             result.add(enrichScenario(scenario, scenarioStatuses, pendingScenarioIds));
@@ -66,7 +70,7 @@ public class ScenarioService {
 
     public Map<String, Object> get(String serviceId, String scenarioId) {
         Path qapilotDir = qapilotDir(serviceId);
-        Map<String, Object> scenario = scenarioFileStore.load(qapilotDir, scenarioId);
+        Map<String, Object> scenario = scenarioReader.requireByServiceIdAndTsId(serviceId, scenarioId);
         return enrichScenario(
                 scenario,
                 statusAggregator.scenarioStatuses(qapilotDir),
@@ -99,8 +103,8 @@ public class ScenarioService {
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> testCases(String serviceId, String scenarioId) {
         Path qapilotDir = qapilotDir(serviceId);
-        // get() 이 enrich 된 scenario 를 반환하므로 raw 파일에서 다시 읽어 test_cases 만 추출
-        Map<String, Object> raw = scenarioFileStore.load(qapilotDir, scenarioId);
+        // PR-15d — DB current 버전 payload 의 test_cases 만 추출
+        Map<String, Object> raw = scenarioReader.requireByServiceIdAndTsId(serviceId, scenarioId);
         Object value = raw.get("test_cases");
         if (!(value instanceof List<?> list)) {
             return List.of();

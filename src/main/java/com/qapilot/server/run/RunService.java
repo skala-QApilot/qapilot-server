@@ -7,7 +7,6 @@ import com.qapilot.server.run.dto.RunCreateRequest;
 import com.qapilot.server.run.dto.RunResponse;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.QapilotService;
-import com.qapilot.server.trace.TraceFileStore;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -27,18 +26,18 @@ import reactor.core.publisher.Flux;
 public class RunService {
 
     private final ServiceDomainService serviceDomainService;
-    private final TraceFileStore traceFileStore;
+    private final RunReader runReader;
     private final FastApiAgentClient fastApiAgentClient;
     private final ReactiveStringRedisTemplate redisTemplate;
 
     public RunService(
             ServiceDomainService serviceDomainService,
-            TraceFileStore traceFileStore,
+            RunReader runReader,
             FastApiAgentClient fastApiAgentClient,
             ReactiveStringRedisTemplate redisTemplate
     ) {
         this.serviceDomainService = serviceDomainService;
-        this.traceFileStore = traceFileStore;
+        this.runReader = runReader;
         this.fastApiAgentClient = fastApiAgentClient;
         this.redisTemplate = redisTemplate;
     }
@@ -147,8 +146,8 @@ public class RunService {
     }
 
     private Map<String, Object> trace(String serviceId, String traceId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
-        return traceFileStore.findById(Path.of(service.qapilotDir()), traceId)
+        serviceDomainService.getById(serviceId);   // 존재/권한 체크
+        return runReader.findById(traceId)
                 .orElseThrow(() -> new QapilotException(ErrorCode.RUN_001));
     }
 
@@ -175,6 +174,6 @@ public class RunService {
 
     private List<Map<String, Object>> traces(String serviceId) {
         QapilotService service = serviceDomainService.getById(serviceId);
-        return traceFileStore.listAll(Path.of(service.qapilotDir()));
+        return runReader.listByServiceId(service.serviceId());
     }
 }
