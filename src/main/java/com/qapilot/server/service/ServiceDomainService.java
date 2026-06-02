@@ -54,6 +54,7 @@ public class ServiceDomainService {
     private final QapilotProperties properties;
     private final ServiceJpaRepository serviceJpaRepository;
     private final ServiceRepoJpaRepository serviceRepoJpaRepository;
+    private final ServiceEntityMapper serviceEntityMapper;
     private final OrganizationService organizationService;
 
     public ServiceDomainService(
@@ -63,6 +64,7 @@ public class ServiceDomainService {
             QapilotProperties properties,
             ServiceJpaRepository serviceJpaRepository,
             ServiceRepoJpaRepository serviceRepoJpaRepository,
+            ServiceEntityMapper serviceEntityMapper,
             OrganizationService organizationService
     ) {
         this.serviceFileStore = serviceFileStore;
@@ -71,11 +73,16 @@ public class ServiceDomainService {
         this.properties = properties;
         this.serviceJpaRepository = serviceJpaRepository;
         this.serviceRepoJpaRepository = serviceRepoJpaRepository;
+        this.serviceEntityMapper = serviceEntityMapper;
         this.organizationService = organizationService;
     }
 
     public List<ServiceResponse> listServices() {
-        return serviceFileStore.loadServices().stream().map(ServiceResponse::from).toList();
+        // PR-15g — DB 가 read 의 source of truth. services.json 은 dual-write 잔존 (PR-15h 정리).
+        return serviceJpaRepository.findAll().stream()
+                .map(serviceEntityMapper::toDomain)
+                .map(ServiceResponse::from)
+                .toList();
     }
 
     public QapilotService create(ServiceCreateRequest request, UUID userId) {
@@ -194,12 +201,20 @@ public class ServiceDomainService {
     }
 
     public QapilotService getById(String serviceId) {
-        return serviceFileStore.findById(serviceId)
-                .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
+        try {
+            return serviceJpaRepository.findById(UUID.fromString(serviceId))
+                    .map(serviceEntityMapper::toDomain)
+                    .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
+        } catch (IllegalArgumentException e) {
+            // serviceId 가 UUID 형식이 아님 (옛 string id 등) — file fallback 으로 한번 더 시도
+            return serviceFileStore.findById(serviceId)
+                    .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
+        }
     }
 
     public QapilotService getByProjectSlug(String projectSlug) {
-        return serviceFileStore.findByProjectSlug(projectSlug)
+        return serviceJpaRepository.findBySlug(projectSlug)
+                .map(serviceEntityMapper::toDomain)
                 .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
     }
 
