@@ -30,14 +30,17 @@ import org.springframework.stereotype.Service;
 public class RtmService {
 
     private final ServiceDomainService serviceDomainService;
-    private final RtmFileStore rtmFileStore;
+    private final RtmFileStore rtmFileStore;          // 잔존 — create 의 file 쓰기 (PR-15g 정리)
+    private final RtmReader rtmReader;                // PR-15e — 모든 read 의 single source
     private final ObjectMapper objectMapper;
     private final ScenarioStatusAggregator scenarioStatusAggregator;
 
     public RtmService(ServiceDomainService serviceDomainService, RtmFileStore rtmFileStore,
-                      ObjectMapper objectMapper, ScenarioStatusAggregator scenarioStatusAggregator) {
+                      RtmReader rtmReader, ObjectMapper objectMapper,
+                      ScenarioStatusAggregator scenarioStatusAggregator) {
         this.serviceDomainService = serviceDomainService;
         this.rtmFileStore = rtmFileStore;
+        this.rtmReader = rtmReader;
         this.objectMapper = objectMapper;
         this.scenarioStatusAggregator = scenarioStatusAggregator;
     }
@@ -46,7 +49,8 @@ public class RtmService {
         Path qapilotDir = qapilotDir(serviceId);
         Map<String, ScenarioStatusAggregator.RunStatus> tcStatuses =
                 scenarioStatusAggregator.testCaseStatuses(qapilotDir);
-        return rtmFileStore.listAll(qapilotDir).stream()
+        // PR-15e — file → DB read. RtmReader 가 versions + requirements + tc_links JOIN 한 결과 반환.
+        return rtmReader.listByServiceId(serviceId).stream()
                 .map(version -> enrichVersion(version, tcStatuses))
                 .toList();
     }
@@ -72,7 +76,8 @@ public class RtmService {
 
     public RtmVersion get(String serviceId, String rtmVersionId) {
         Path qapilotDir = qapilotDir(serviceId);
-        RtmVersion version = rtmFileStore.load(qapilotDir, rtmVersionId);
+        RtmVersion version = rtmReader.findById(serviceId, rtmVersionId)
+                .orElseThrow(() -> new QapilotException(ErrorCode.RTM_001));
         return enrichVersion(version, scenarioStatusAggregator.testCaseStatuses(qapilotDir));
     }
 
