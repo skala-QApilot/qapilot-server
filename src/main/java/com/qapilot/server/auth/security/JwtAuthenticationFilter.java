@@ -35,11 +35,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        return request.getRequestURI().startsWith("/api/cli/");
-    }
-
-    @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
@@ -54,11 +49,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void authenticate(HttpServletRequest request) {
-        String header = request.getHeader("Authorization");
-        if (header == null || !header.startsWith("Bearer ")) {
+        String token = extractToken(request);
+        if (token == null) {
             return;
         }
-        JwtClaims claims = tokenProvider.verify(header.substring("Bearer ".length()));
+        JwtClaims claims = tokenProvider.verify(token);
         if (!"access".equals(claims.type())) {
             throw new QapilotException(ErrorCode.AUTH_003);
         }
@@ -69,6 +64,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 List.of(new SimpleGrantedAuthority("ROLE_" + claims.role()))
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    /**
+     * 1순위: Authorization: Bearer 헤더.
+     * 2순위: SSE 엔드포인트 (/stream) 전용 ?access_token= 쿼리 파라미터 — 브라우저 EventSource 가
+     *        헤더를 못 보내므로 query param 으로 폴백. 쿼리 토큰은 액세스 로그에 남으므로 SSE 외엔 허용 안 함.
+     */
+    private String extractToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring("Bearer ".length());
+        }
+        if (request.getRequestURI().endsWith("/stream")) {
+            String queryToken = request.getParameter("access_token");
+            if (queryToken != null && !queryToken.isBlank()) {
+                return queryToken;
+            }
+        }
+        return null;
     }
 
     private void writeError(HttpServletResponse response, ErrorCode code, String message) throws IOException {

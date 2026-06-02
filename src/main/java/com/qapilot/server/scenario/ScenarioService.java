@@ -2,7 +2,6 @@ package com.qapilot.server.scenario;
 
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
-import com.qapilot.server.scenario.store.ScenarioFileStore;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.QapilotService;
 import java.nio.file.Path;
@@ -14,10 +13,10 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
- * 서비스 범위 시나리오 유스케이스.
+ * 서비스 범위 시나리오 유스케이스. PR-15h — JPA only.
  *
  * <p>Author: C
- * <br>Created: 2026-05-18
+ * <br>Created: 2026-05-18, rewritten 2026-06-02
  */
 @Service
 public class ScenarioService {
@@ -27,18 +26,21 @@ public class ScenarioService {
     );
 
     private final ServiceDomainService serviceDomainService;
-    private final ScenarioFileStore scenarioFileStore;
+    private final ScenarioReader scenarioReader;
+    private final ScenarioWriter scenarioWriter;
     private final ScenarioStatusAggregator statusAggregator;
     private final ScenarioPendingChangesResolver pendingChangesResolver;
 
     public ScenarioService(
             ServiceDomainService serviceDomainService,
-            ScenarioFileStore scenarioFileStore,
+            ScenarioReader scenarioReader,
+            ScenarioWriter scenarioWriter,
             ScenarioStatusAggregator statusAggregator,
             ScenarioPendingChangesResolver pendingChangesResolver
     ) {
         this.serviceDomainService = serviceDomainService;
-        this.scenarioFileStore = scenarioFileStore;
+        this.scenarioReader = scenarioReader;
+        this.scenarioWriter = scenarioWriter;
         this.statusAggregator = statusAggregator;
         this.pendingChangesResolver = pendingChangesResolver;
     }
@@ -50,7 +52,7 @@ public class ScenarioService {
         Set<String> pendingScenarioIds = pendingChangesResolver.scenariosWithPendingChanges(qapilotDir);
 
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Map<String, Object> scenario : scenarioFileStore.listAll(qapilotDir)) {
+        for (Map<String, Object> scenario : scenarioReader.listByServiceId(serviceId)) {
             if (!matchesSearch(scenario, search)) continue;
             if (trigger != null && !trigger.isBlank() && !trigger.equals(scenario.get("trigger"))) continue;
             result.add(enrichScenario(scenario, scenarioStatuses, pendingScenarioIds));
@@ -60,13 +62,14 @@ public class ScenarioService {
 
     public Map<String, Object> create(String serviceId, Map<String, Object> scenario) {
         validateScenario(scenario);
-        scenarioFileStore.save(qapilotDir(serviceId), scenario);
+        String tsId = String.valueOf(scenario.get("ts_id"));
+        scenarioWriter.upsertVersion(serviceId, tsId, scenario);
         return scenario;
     }
 
     public Map<String, Object> get(String serviceId, String scenarioId) {
         Path qapilotDir = qapilotDir(serviceId);
-        Map<String, Object> scenario = scenarioFileStore.load(qapilotDir, scenarioId);
+        Map<String, Object> scenario = scenarioReader.requireByServiceIdAndTsId(serviceId, scenarioId);
         return enrichScenario(
                 scenario,
                 statusAggregator.scenarioStatuses(qapilotDir),
@@ -76,15 +79,14 @@ public class ScenarioService {
 
     public Map<String, Object> update(String serviceId, String scenarioId, Map<String, Object> patch) {
         Path qapilotDir = qapilotDir(serviceId);
-        // enrich 필드가 디스크에 새지 않도록 raw 시나리오를 base 로 사용
-        Map<String, Object> current = new LinkedHashMap<>(scenarioFileStore.load(qapilotDir, scenarioId));
+        Map<String, Object> current = new LinkedHashMap<>(
+                scenarioReader.requireByServiceIdAndTsId(serviceId, scenarioId));
         current.putAll(patch);
         current.put("ts_id", scenarioId);
-        // 클라이언트가 실수로 보낸 derive 필드는 제거 (서버가 매번 재계산)
         current.remove("last_run_status");
         current.remove("last_run_at");
         current.remove("has_pending_changes");
-        scenarioFileStore.save(qapilotDir, current);
+        scenarioWriter.upsertVersion(serviceId, scenarioId, current);
         return enrichScenario(
                 current,
                 statusAggregator.scenarioStatuses(qapilotDir),
@@ -93,14 +95,13 @@ public class ScenarioService {
     }
 
     public void delete(String serviceId, String scenarioId) {
-        scenarioFileStore.delete(qapilotDir(serviceId), scenarioId);
+        scenarioWriter.delete(serviceId, scenarioId);
     }
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> testCases(String serviceId, String scenarioId) {
         Path qapilotDir = qapilotDir(serviceId);
-        // get() 이 enrich 된 scenario 를 반환하므로 raw 파일에서 다시 읽어 test_cases 만 추출
-        Map<String, Object> raw = scenarioFileStore.load(qapilotDir, scenarioId);
+        Map<String, Object> raw = scenarioReader.requireByServiceIdAndTsId(serviceId, scenarioId);
         Object value = raw.get("test_cases");
         if (!(value instanceof List<?> list)) {
             return List.of();
@@ -121,7 +122,6 @@ public class ScenarioService {
         return Path.of(service.qapilotDir());
     }
 
-    /** Scenario raw map 에 last_run_status / last_run_at / has_pending_changes 를 추가한다. */
     private Map<String, Object> enrichScenario(
             Map<String, Object> scenario,
             Map<String, ScenarioStatusAggregator.RunStatus> scenarioStatuses,
@@ -136,7 +136,6 @@ public class ScenarioService {
         return enriched;
     }
 
-    /** TestCase raw map 에 last_run_status / last_run_at 를 추가한다. */
     private Map<String, Object> enrichTestCase(
             Map<String, Object> testCase,
             Map<String, ScenarioStatusAggregator.RunStatus> tcStatuses

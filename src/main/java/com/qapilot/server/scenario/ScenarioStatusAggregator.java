@@ -1,84 +1,157 @@
 package com.qapilot.server.scenario;
 
-import com.qapilot.server.trace.TraceFileStore;
+import com.qapilot.server.service.persistence.ServiceJpaRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /**
- * 최근 trace 들로부터 시나리오 / TC 별 last_run_status 를 도출한다.
+ * 시나리오 / TC 별 last_run_status — tc_results JOIN runs 의 SQL 집계.
  *
- * <p>FastAPI 가 test 명령 종료 시 trace.json 에 `scenario_results`, `tc_results` 맵을
- * 보존하므로 (qapilot trace_store.update_trace), 본 aggregator 는 단일 파일 읽기로
- * Spring 응답을 enrich 한다. 디렉토리 트리 스캔 없음.
+ * <p>PR-15d — trace JSON 디스크 스캔 → SQL 전환. Path-기반 시그니처는 호환을 위해 유지하되
+ * 실제로는 qapilotDir 의 마지막 segment (slug) 로 service 를 lookup → 그 service 의 runs 만 본다.
  *
- * <p>Phase D (DB) 진화 시: file 기반 trace 순회 → `scenario_run_results` 테이블 JOIN
- * 으로 자연 교체. 인터페이스 (입력 qapilotDir, 출력 Map) 는 동일.
+ * <p>status 어휘는 기존 file 기반과 호환을 위해 매핑:
+ * <ul>
+ *   <li>tc_results.status = "pass"/"fail"/"skip" → "passed"/"failed"/"skipped"</li>
+ *   <li>scenario 단위 status 는 TC 중 하나라도 fail 이면 "failed", 모두 pass 면 "passed"</li>
+ * </ul>
  *
  * <p>Author: C
- * <br>Created: 2026-05-19
+ * <br>Created: 2026-05-19, rewritten 2026-06-02
  */
 @Component
 public class ScenarioStatusAggregator {
 
-    private final TraceFileStore traceFileStore;
+    private final ServiceJpaRepository serviceJpaRepository;
 
-    public ScenarioStatusAggregator(TraceFileStore traceFileStore) {
-        this.traceFileStore = traceFileStore;
+    @PersistenceContext
+    private EntityManager em;
+
+    public ScenarioStatusAggregator(ServiceJpaRepository serviceJpaRepository) {
+        this.serviceJpaRepository = serviceJpaRepository;
     }
 
-    /**
-     * 시나리오 id 별 최근 실행 status (entry 없으면 한 번도 실행 안 된 시나리오).
-     */
+    /** ts_id 별 최근 실행 status (entry 없으면 한 번도 실행 안 됨). */
     public Map<String, RunStatus> scenarioStatuses(Path qapilotDir) {
-        return aggregate(qapilotDir, "scenario_results");
+        UUID serviceId = serviceIdFromQapilotDir(qapilotDir);
+        if (serviceId == null) {
+            return Map.of();
+        }
+        return scenarioStatusesByServiceId(serviceId);
+    }
+
+    /** tc_id 별 최근 실행 status. */
+    public Map<String, RunStatus> testCaseStatuses(Path qapilotDir) {
+        UUID serviceId = serviceIdFromQapilotDir(qapilotDir);
+        if (serviceId == null) {
+            return Map.of();
+        }
+        return testCaseStatusesByServiceId(serviceId);
     }
 
     /**
-     * 테스트 케이스 id 별 최근 실행 status.
+     * tc_id 별 최근 ui kind 결과.
+     *
+     * <p>DISTINCT ON (tc_id) — 같은 TC 가 여러 run 에 걸쳐 결과 있으면 가장 최근 (completed_at DESC) 만.
+     * api/db kind 는 supplementary 라 제외, ui status 가 TC 의 운명을 결정.
      */
-    public Map<String, RunStatus> testCaseStatuses(Path qapilotDir) {
-        return aggregate(qapilotDir, "tc_results");
+    @SuppressWarnings("unchecked")
+    public Map<String, RunStatus> testCaseStatusesByServiceId(UUID serviceId) {
+        List<Object[]> rows = em.createNativeQuery(
+                "SELECT DISTINCT ON (tc.tc_id) tc.tc_id, tc.status, r.completed_at, r.started_at " +
+                "FROM tc_results tc JOIN runs r ON r.id = tc.run_id " +
+                "WHERE r.service_id = :svc AND tc.kind = 'ui' AND tc.status IS NOT NULL " +
+                "ORDER BY tc.tc_id, r.completed_at DESC NULLS LAST, r.started_at DESC"
+        ).setParameter("svc", serviceId).getResultList();
+
+        Map<String, RunStatus> result = new HashMap<>(rows.size());
+        for (Object[] row : rows) {
+            String tcId = (String) row[0];
+            String legacy = toLegacyStatus((String) row[1]);
+            String at = toIso((Instant) (row[2] != null ? row[2] : row[3]));
+            result.put(tcId, new RunStatus(legacy, at));
+        }
+        return result;
     }
 
-    private Map<String, RunStatus> aggregate(Path qapilotDir, String field) {
-        // TraceFileStore.listAll 은 started_at 내림차순 정렬. 가장 최근 trace 가 우선.
-        List<Map<String, Object>> traces = traceFileStore.listAll(qapilotDir);
+    /**
+     * ts_id 별 시나리오 단위 status — TC 결과들에서 derive.
+     * 하나라도 fail 이면 failed, 전부 pass 면 passed, 그 외엔 (skip 만 있거나 mixed null) → null.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, RunStatus> scenarioStatusesByServiceId(UUID serviceId) {
+        // 각 ts_id 의 최근 run 의 (status, completed_at) 들을 모은다.
+        // ts_id 별로 그 run 의 tc 결과를 aggregate.
+        List<Object[]> rows = em.createNativeQuery(
+                "WITH latest_tc AS (" +
+                "  SELECT DISTINCT ON (tc.ts_id, tc.tc_id) tc.ts_id, tc.tc_id, tc.status, " +
+                "         r.completed_at, r.started_at " +
+                "  FROM tc_results tc JOIN runs r ON r.id = tc.run_id " +
+                "  WHERE r.service_id = :svc AND tc.kind = 'ui' AND tc.status IS NOT NULL " +
+                "  ORDER BY tc.ts_id, tc.tc_id, r.completed_at DESC NULLS LAST, r.started_at DESC" +
+                ") " +
+                "SELECT ts_id, " +
+                "       BOOL_OR(status = 'fail')  AS any_fail, " +
+                "       BOOL_AND(status = 'pass') AS all_pass, " +
+                "       MAX(COALESCE(completed_at, started_at)) AS when_at " +
+                "FROM latest_tc GROUP BY ts_id"
+        ).setParameter("svc", serviceId).getResultList();
 
-        Map<String, RunStatus> result = new HashMap<>();
-        for (Map<String, Object> trace : traces) {
-            Object raw = trace.get(field);
-            if (!(raw instanceof Map<?, ?> map)) {
-                continue;
+        Map<String, RunStatus> result = new HashMap<>(rows.size());
+        for (Object[] row : rows) {
+            String tsId = (String) row[0];
+            Boolean anyFail = (Boolean) row[1];
+            Boolean allPass = (Boolean) row[2];
+            String at = toIso((Instant) row[3]);
+            String status;
+            if (Boolean.TRUE.equals(anyFail)) {
+                status = "failed";
+            } else if (Boolean.TRUE.equals(allPass)) {
+                status = "passed";
+            } else {
+                status = null;  // skip 만 있거나 mixed — 의도적으로 미정
             }
-            String when = preferredTimestamp(trace);
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                if (!(entry.getKey() instanceof String id)) {
-                    continue;
-                }
-                if (result.containsKey(id)) {
-                    // 더 최근 trace 의 status 가 이미 기록됨 — 보존
-                    continue;
-                }
-                String status = entry.getValue() == null ? null : entry.getValue().toString();
-                if (status == null || status.isBlank()) {
-                    continue;
-                }
-                result.put(id, new RunStatus(status, when));
+            if (status != null) {
+                result.put(tsId, new RunStatus(status, at));
             }
         }
         return result;
     }
 
-    private String preferredTimestamp(Map<String, Object> trace) {
-        Object completed = trace.get("completed_at");
-        if (completed != null && !completed.toString().isBlank()) {
-            return completed.toString();
+    /**
+     * qapilotDir (e.g. /...../system-under-test/.qapilot/test) 의 마지막 segment 가 service slug.
+     * 그 slug → service UUID 변환. PR-15 컷오버 진행 중이라 qapilotDir 시그니처는 유지.
+     */
+    private UUID serviceIdFromQapilotDir(Path qapilotDir) {
+        if (qapilotDir == null || qapilotDir.getFileName() == null) {
+            return null;
         }
-        Object started = trace.get("started_at");
-        return started == null ? null : started.toString();
+        String slug = qapilotDir.getFileName().toString();
+        return serviceJpaRepository.findAll().stream()
+                .filter(s -> slug.equals(s.getSlug()))
+                .map(s -> s.getId())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static String toLegacyStatus(String dbStatus) {
+        return switch (dbStatus) {
+            case "pass" -> "passed";
+            case "fail" -> "failed";
+            case "skip" -> "skipped";
+            default -> dbStatus;
+        };
+    }
+
+    private static String toIso(Instant instant) {
+        return instant == null ? null : instant.toString();
     }
 
     public record RunStatus(String status, String at) {

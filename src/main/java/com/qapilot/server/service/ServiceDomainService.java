@@ -4,6 +4,8 @@ import com.qapilot.server.common.config.QapilotProperties;
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.common.files.QapilotPathResolver;
+import com.qapilot.server.organization.OrganizationService;
+import com.qapilot.server.organization.domain.Organization;
 import com.qapilot.server.service.domain.QapilotService;
 import com.qapilot.server.service.domain.RepoConfig;
 import com.qapilot.server.service.dto.CredentialsResponse;
@@ -13,7 +15,10 @@ import com.qapilot.server.service.dto.ServiceCreateRequest;
 import com.qapilot.server.service.dto.ServiceResponse;
 import com.qapilot.server.service.dto.ServiceSetupRequest;
 import com.qapilot.server.service.dto.ServiceUpdateRequest;
-import com.qapilot.server.service.store.ServiceFileStore;
+import com.qapilot.server.service.persistence.ServiceEntity;
+import com.qapilot.server.service.persistence.ServiceJpaRepository;
+import com.qapilot.server.service.persistence.ServiceRepoEntity;
+import com.qapilot.server.service.persistence.ServiceRepoJpaRepository;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,63 +44,107 @@ public class ServiceDomainService {
             "generated-code", "logs", "reports", "results", "scenarios", "traces"
     );
 
-    private final ServiceFileStore serviceFileStore;
     private final ServiceSlugGenerator slugGenerator;
     private final QapilotPathResolver pathResolver;
     private final QapilotProperties properties;
+    private final ServiceJpaRepository serviceJpaRepository;
+    private final ServiceRepoJpaRepository serviceRepoJpaRepository;
+    private final ServiceEntityMapper serviceEntityMapper;
+    private final OrganizationService organizationService;
 
     public ServiceDomainService(
-            ServiceFileStore serviceFileStore,
             ServiceSlugGenerator slugGenerator,
             QapilotPathResolver pathResolver,
-            QapilotProperties properties
+            QapilotProperties properties,
+            ServiceJpaRepository serviceJpaRepository,
+            ServiceRepoJpaRepository serviceRepoJpaRepository,
+            ServiceEntityMapper serviceEntityMapper,
+            OrganizationService organizationService
     ) {
-        this.serviceFileStore = serviceFileStore;
         this.slugGenerator = slugGenerator;
         this.pathResolver = pathResolver;
         this.properties = properties;
+        this.serviceJpaRepository = serviceJpaRepository;
+        this.serviceRepoJpaRepository = serviceRepoJpaRepository;
+        this.serviceEntityMapper = serviceEntityMapper;
+        this.organizationService = organizationService;
     }
 
     public List<ServiceResponse> listServices() {
-        return serviceFileStore.loadServices().stream().map(ServiceResponse::from).toList();
+        // PR-15g — DB 가 read 의 source of truth. services.json 은 dual-write 잔존 (PR-15h 정리).
+        return serviceJpaRepository.findAll().stream()
+                .map(serviceEntityMapper::toDomain)
+                .map(ServiceResponse::from)
+                .toList();
     }
 
-    public QapilotService create(ServiceCreateRequest request) {
+    public QapilotService create(ServiceCreateRequest request, UUID userId) {
         String name = requiredName(request.name());
         Path targetRoot = targetRoot(request.targetRoot());
         if (!Files.exists(targetRoot) || !Files.isDirectory(targetRoot)) {
             throw new QapilotException(ErrorCode.SERVICE_002, "대상 경로를 찾을 수 없습니다: " + targetRoot);
         }
 
-        List<QapilotService> services = serviceFileStore.loadServices();
-        String now = now();
-        String slug = slugGenerator.generate(name, services);
-        // 서비스별 격리된 qapilot_dir — `<targetRoot>/.qapilot/<slug>`. 같은 target_root 안에서
-        // 여러 서비스의 시나리오/trace/결과/RTM 이 디렉토리 단위로 분리된다.
-        // services.json, users.json, auth/ 같은 전역 파일은 root .qapilot 에 그대로 둔다
-        // (ServiceFileStore / MemberFileStore 가 pathResolver.qapilotDir() — 인자 없는 오버로드 사용).
+        // PR-15h — slug 충돌 체크 DB 기반.
+        String slug = ensureUniqueSlug(slugGenerator.normalize(name));
         Path qapilotDir = pathResolver.qapilotDir(targetRoot, slug);
         createRequiredDirs(qapilotDir);
 
-        QapilotService service = new QapilotService(
-                UUID.randomUUID().toString(),
-                slug,
-                name,
-                request.description() == null ? "" : request.description(),
-                targetRoot.toString(),
-                qapilotDir.toString(),
-                dashboardUrl(slug),
-                generateServerAuthToken(),
-                now,
-                null,
-                now,
-                now,
-                normalizeRepos(request.repos()),
-                nullIfBlank(request.stagingUrl())
-        );
-        services.add(service);
-        serviceFileStore.saveServices(services);
-        return service;
+        UUID orgId = resolvePersonalOrgId(userId);
+        if (orgId == null) {
+            throw new QapilotException(ErrorCode.SERVICE_001, "userId 의 organization 을 찾을 수 없습니다.");
+        }
+
+        UUID serviceId = UUID.randomUUID();
+        Instant nowInstant = Instant.now();
+        ServiceEntity entity = new ServiceEntity();
+        entity.setId(serviceId);
+        entity.setOrgId(orgId);
+        entity.setSlug(slug);
+        entity.setDisplayName(name);
+        entity.setDescription(request.description() == null ? "" : request.description());
+        entity.setTargetRoot(targetRoot.toString());
+        entity.setQapilotDir(qapilotDir.toString());
+        entity.setDashboardUrl(dashboardUrl(slug));
+        entity.setServerAuthToken(generateServerAuthToken());
+        entity.setTokenIssuedAt(nowInstant);
+        entity.setStagingUrl(nullIfBlank(request.stagingUrl()));
+        serviceJpaRepository.save(entity);
+
+        List<RepoConfig> normalizedRepos = normalizeRepos(request.repos());
+        if (normalizedRepos != null) {
+            int position = 0;
+            for (RepoConfig repo : normalizedRepos) {
+                ServiceRepoEntity repoEntity = new ServiceRepoEntity();
+                repoEntity.setId(UUID.randomUUID());
+                repoEntity.setServiceId(serviceId);
+                repoEntity.setRepoUrl(repo.repoUrl());
+                repoEntity.setBranch(repo.branch());
+                repoEntity.setRole(repo.role());
+                repoEntity.setToken(repo.token());
+                repoEntity.setPosition(position++);
+                serviceRepoJpaRepository.save(repoEntity);
+            }
+        }
+
+        return serviceEntityMapper.toDomain(entity);
+    }
+
+    /** baseSlug 와 같은 slug 가 DB 에 있으면 -2, -3... suffix 부여. */
+    private String ensureUniqueSlug(String baseSlug) {
+        if (serviceJpaRepository.findBySlug(baseSlug).isEmpty()) {
+            return baseSlug;
+        }
+        int suffix = 2;
+        while (serviceJpaRepository.findBySlug(baseSlug + "-" + suffix).isPresent()) {
+            suffix++;
+        }
+        return baseSlug + "-" + suffix;
+    }
+
+    private UUID resolvePersonalOrgId(UUID userId) {
+        List<Organization> orgs = organizationService.listForUser(userId);
+        return orgs.isEmpty() ? null : orgs.get(0).getId();
     }
 
     private static String nullIfBlank(String value) {
@@ -123,24 +172,32 @@ public class ServiceDomainService {
     }
 
     public QapilotService getById(String serviceId) {
-        return serviceFileStore.findById(serviceId)
-                .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
+        try {
+            return serviceJpaRepository.findById(UUID.fromString(serviceId))
+                    .map(serviceEntityMapper::toDomain)
+                    .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
+        } catch (IllegalArgumentException e) {
+            throw new QapilotException(ErrorCode.SERVICE_001);
+        }
     }
 
     public QapilotService getByProjectSlug(String projectSlug) {
-        return serviceFileStore.findByProjectSlug(projectSlug)
+        return serviceJpaRepository.findBySlug(projectSlug)
+                .map(serviceEntityMapper::toDomain)
                 .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
     }
 
     public QapilotService update(String serviceId, ServiceUpdateRequest request) {
-        List<QapilotService> services = serviceFileStore.loadServices();
-        QapilotService current = services.stream()
-                .filter(service -> service.serviceId().equals(serviceId))
-                .findFirst()
+        ServiceEntity entity = serviceJpaRepository.findById(UUID.fromString(serviceId))
                 .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
-        QapilotService updated = copyWithMutableFields(current, request.name(), request.description(), now());
-        serviceFileStore.saveServices(replaceService(services, updated));
-        return updated;
+        if (request.name() != null && !request.name().isBlank()) {
+            entity.setDisplayName(request.name().trim());
+        }
+        if (request.description() != null) {
+            entity.setDescription(request.description());
+        }
+        serviceJpaRepository.save(entity);
+        return serviceEntityMapper.toDomain(entity);
     }
 
     public QapilotService setup(String serviceId, ServiceSetupRequest request) {
@@ -157,16 +214,13 @@ public class ServiceDomainService {
     }
 
     public QapilotService rotateToken(String serviceId) {
-        List<QapilotService> services = serviceFileStore.loadServices();
-        QapilotService current = getById(serviceId);
-        QapilotService rotated = new QapilotService(
-                current.serviceId(), current.projectSlug(), current.displayName(), current.description(),
-                current.targetRoot(), current.qapilotDir(), current.dashboardUrl(), generateServerAuthToken(),
-                now(), null, current.createdAt(), now(),
-                current.repos(), current.stagingUrl()
-        );
-        serviceFileStore.saveServices(replaceService(services, rotated));
-        return rotated;
+        ServiceEntity entity = serviceJpaRepository.findById(UUID.fromString(serviceId))
+                .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
+        entity.setServerAuthToken(generateServerAuthToken());
+        entity.setTokenIssuedAt(Instant.now());
+        entity.setTokenExpiresAt(null);
+        serviceJpaRepository.save(entity);
+        return serviceEntityMapper.toDomain(entity);
     }
 
     public ProjectDashboardResponse projectDashboard(String projectSlug) {
@@ -179,8 +233,9 @@ public class ServiceDomainService {
     }
 
     public boolean tokenMatches(String projectSlug, String token) {
-        return serviceFileStore.findByProjectSlug(projectSlug)
-                .filter(service -> service.serverAuthToken().equals(token))
+        return serviceJpaRepository.findBySlug(projectSlug)
+                .map(ServiceEntity::getServerAuthToken)
+                .filter(stored -> stored.equals(token))
                 .isPresent();
     }
 
@@ -244,37 +299,4 @@ public class ServiceDomainService {
         }
     }
 
-    private List<QapilotService> replaceService(List<QapilotService> services, QapilotService updated) {
-        return services.stream()
-                .map(service -> service.serviceId().equals(updated.serviceId()) ? updated : service)
-                .toList();
-    }
-
-    private QapilotService copyWithMutableFields(
-            QapilotService current,
-            String name,
-            String description,
-            String updatedAt
-    ) {
-        return new QapilotService(
-                current.serviceId(),
-                current.projectSlug(),
-                name == null || name.isBlank() ? current.displayName() : name.trim(),
-                description == null ? current.description() : description,
-                current.targetRoot(),
-                current.qapilotDir(),
-                current.dashboardUrl(),
-                current.serverAuthToken(),
-                current.tokenIssuedAt(),
-                current.tokenExpiresAt(),
-                current.createdAt(),
-                updatedAt,
-                current.repos(),
-                current.stagingUrl()
-        );
-    }
-
-    private String now() {
-        return Instant.now().toString();
-    }
 }

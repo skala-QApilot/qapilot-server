@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
+import reactor.core.publisher.Flux;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -66,6 +68,15 @@ public class RunController {
     @GetMapping("/{runId}/run-progress")
     public ApiResponse<Map<String, Object>> runProgress(@PathVariable String serviceId, @PathVariable String runId) {
         return ApiResponse.ok(runService.runProgress(serviceId, runId));
+    }
+
+    /**
+     * SSE — FastAPI worker → Redis → 여기 → UI 의 EventSource.
+     * 이벤트 종류: status / annotate / tc_result / artifact. 1초 폴링 대체.
+     */
+    @GetMapping(value = "/{runId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> stream(@PathVariable String serviceId, @PathVariable String runId) {
+        return runService.stream(serviceId, runId);
     }
 
     /** 가장 최근 PNG 스크린샷. UI 의 1초 폴링이 호출. 없으면 204. */

@@ -1,5 +1,6 @@
 package com.qapilot.server.service;
 
+import com.qapilot.server.auth.security.AuthenticatedUser;
 import com.qapilot.server.common.response.ApiResponse;
 import com.qapilot.server.service.dto.CredentialsResponse;
 import com.qapilot.server.service.dto.ServiceCreateRequest;
@@ -9,6 +10,8 @@ import com.qapilot.server.service.dto.ServiceUpdateRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,8 +43,12 @@ public class ServiceController {
     }
 
     @PostMapping
-    public ApiResponse<Map<String, ServiceResponse>> create(@Valid @RequestBody ServiceCreateRequest request) {
-        return ApiResponse.ok(Map.of("service", ServiceResponse.from(serviceDomainService.create(request))));
+    public ApiResponse<Map<String, ServiceResponse>> create(
+            @Valid @RequestBody ServiceCreateRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = UUID.fromString(user.userId());
+        return ApiResponse.ok(Map.of("service", ServiceResponse.from(serviceDomainService.create(request, userId))));
     }
 
     @GetMapping("/{serviceId}")

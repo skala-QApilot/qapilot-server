@@ -1,56 +1,35 @@
 package com.qapilot.server.auth.store;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.qapilot.server.auth.domain.RevokedRefreshToken;
-import com.qapilot.server.common.files.JsonFileStore;
-import com.qapilot.server.common.files.QapilotPathResolver;
-import java.nio.file.Path;
+import com.qapilot.server.auth.persistence.RevokedTokenEntity;
+import com.qapilot.server.auth.persistence.RevokedTokenRepository;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
- * revoked-refresh-tokens.json 파일 기반 refresh token 무효화 저장소.
+ * revoked_tokens 테이블 기반 refresh token 무효화 저장소. PR-15h — JPA 전환.
  *
  * <p>Author: C
- * <br>Created: 2026-05-18
+ * <br>Created: 2026-05-18, rewritten 2026-06-02
  */
 @Component
 public class RevokedRefreshTokenStore {
 
-    private final JsonFileStore jsonFileStore;
-    private final QapilotPathResolver pathResolver;
+    private final RevokedTokenRepository revokedTokenRepository;
 
-    public RevokedRefreshTokenStore(JsonFileStore jsonFileStore, QapilotPathResolver pathResolver) {
-        this.jsonFileStore = jsonFileStore;
-        this.pathResolver = pathResolver;
+    public RevokedRefreshTokenStore(RevokedTokenRepository revokedTokenRepository) {
+        this.revokedTokenRepository = revokedTokenRepository;
     }
 
     public boolean isRevoked(String jti) {
-        return loadActiveTokens().stream().anyMatch(token -> token.jti().equals(jti));
+        return revokedTokenRepository.existsById(jti);
     }
 
     public void revoke(String jti, Instant expiresAt) {
-        List<RevokedRefreshToken> tokens = loadActiveTokens();
-        tokens.add(new RevokedRefreshToken(jti, expiresAt.toString()));
-        jsonFileStore.write(tokensPath(), tokens);
-    }
-
-    private List<RevokedRefreshToken> loadActiveTokens() {
-        Instant now = Instant.now();
-        List<RevokedRefreshToken> tokens = new ArrayList<>(jsonFileStore.readOrDefault(tokensPath(), new TypeReference<>() {
-        }, List.of()));
-        List<RevokedRefreshToken> active = tokens.stream()
-                .filter(token -> Instant.parse(token.expiresAt()).isAfter(now))
-                .toList();
-        if (active.size() != tokens.size()) {
-            jsonFileStore.write(tokensPath(), active);
-        }
-        return new ArrayList<>(active);
-    }
-
-    private Path tokensPath() {
-        return pathResolver.qapilotDir().resolve("auth").resolve("revoked-refresh-tokens.json");
+        // lazy cleanup — 만료된 deny-list 행 제거 (테이블 무한 성장 방지).
+        revokedTokenRepository.deleteExpired(Instant.now());
+        RevokedTokenEntity entity = new RevokedTokenEntity();
+        entity.setJti(jti);
+        entity.setExpiresAt(expiresAt);
+        revokedTokenRepository.save(entity);
     }
 }

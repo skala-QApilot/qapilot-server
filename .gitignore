@@ -35,3 +35,8 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Env / Local infra ###
+.env
+.env.local
+

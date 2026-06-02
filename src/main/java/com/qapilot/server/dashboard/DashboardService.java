@@ -1,11 +1,11 @@
 package com.qapilot.server.dashboard;
 
 import com.qapilot.server.dashboard.dto.DashboardSummaryResponse;
+import com.qapilot.server.run.RunReader;
 import com.qapilot.server.run.dto.RunResponse;
-import com.qapilot.server.scenario.store.ScenarioFileStore;
+import com.qapilot.server.scenario.ScenarioReader;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.QapilotService;
-import com.qapilot.server.trace.TraceFileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -22,26 +22,26 @@ import org.springframework.stereotype.Service;
 public class DashboardService {
 
     private final ServiceDomainService serviceDomainService;
-    private final ScenarioFileStore scenarioFileStore;
-    private final TraceFileStore traceFileStore;
+    private final ScenarioReader scenarioReader;
+    private final RunReader runReader;
 
     public DashboardService(
             ServiceDomainService serviceDomainService,
-            ScenarioFileStore scenarioFileStore,
-            TraceFileStore traceFileStore
+            ScenarioReader scenarioReader,
+            RunReader runReader
     ) {
         this.serviceDomainService = serviceDomainService;
-        this.scenarioFileStore = scenarioFileStore;
-        this.traceFileStore = traceFileStore;
+        this.scenarioReader = scenarioReader;
+        this.runReader = runReader;
     }
 
     public DashboardSummaryResponse summary(String serviceId) {
         QapilotService service = serviceDomainService.getById(serviceId);
         Path qapilotDir = Path.of(service.qapilotDir());
-        List<Map<String, Object>> traces = traceFileStore.listAll(qapilotDir);
+        List<Map<String, Object>> traces = runReader.listByServiceId(service.serviceId());
         List<RunResponse> recentRuns = traces.stream().limit(5).map(RunResponse::fromTrace).toList();
         return new DashboardSummaryResponse(
-                scenarioFileStore.listAll(qapilotDir).size(),
+                scenarioReader.listByServiceId(serviceId).size(),
                 recentRuns,
                 domainFiles(qapilotDir),
                 null,

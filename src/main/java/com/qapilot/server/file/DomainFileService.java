@@ -4,65 +4,138 @@ import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.file.domain.DomainFileMeta;
 import com.qapilot.server.file.dto.FileUpdateRequest;
-import com.qapilot.server.file.store.DomainFileStore;
-import com.qapilot.server.service.ServiceDomainService;
-import com.qapilot.server.service.domain.QapilotService;
-import java.nio.file.Path;
+import com.qapilot.server.file.persistence.DomainDocumentEntity;
+import com.qapilot.server.file.persistence.DomainDocumentRepository;
+import com.qapilot.server.storage.S3Service;
+import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 도메인 파일 유스케이스.
+ * 도메인 파일 유스케이스. PR-15h — JPA + S3 only.
  *
  * <p>Author: C
- * <br>Created: 2026-05-18
+ * <br>Created: 2026-05-18, rewritten 2026-06-02
  */
 @Service
 public class DomainFileService {
 
-    private final ServiceDomainService serviceDomainService;
-    private final DomainFileStore domainFileStore;
+    private final DomainDocumentRepository documentRepository;
+    private final S3Service s3Service;
 
-    public DomainFileService(ServiceDomainService serviceDomainService, DomainFileStore domainFileStore) {
-        this.serviceDomainService = serviceDomainService;
-        this.domainFileStore = domainFileStore;
+    public DomainFileService(DomainDocumentRepository documentRepository, S3Service s3Service) {
+        this.documentRepository = documentRepository;
+        this.s3Service = s3Service;
     }
 
     public List<DomainFileMeta> list(String serviceId) {
-        return domainFileStore.loadAll(qapilotDir(serviceId));
+        UUID svc = UUID.fromString(serviceId);
+        return documentRepository.findAllByServiceIdOrderByUploadedAtDesc(svc).stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        e -> e.getFileId() != null ? e.getFileId() : e.getId()))
+                .values().stream()
+                .map(group -> group.stream().max(Comparator.comparingInt(DomainDocumentEntity::getVersion)).orElseThrow())
+                .sorted(Comparator.comparing(DomainDocumentEntity::getUploadedAt).reversed())
+                .map(this::toMeta)
+                .toList();
     }
 
     public DomainFileMeta create(String serviceId, MultipartFile file) {
-        return domainFileStore.create(qapilotDir(serviceId), filename(file), bytes(file), contentType(file));
+        UUID svc = UUID.fromString(serviceId);
+        UUID fileId = UUID.randomUUID();
+        String filename = requireFilename(file);
+        String s3Key = buildKey(svc, fileId, 1, filename);
+        if (s3Service.put(s3Key, bytes(file), contentType(file)) == null) {
+            throw new QapilotException(ErrorCode.FILE_001, "S3 업로드 실패");
+        }
+        DomainDocumentEntity entity = save(svc, fileId, filename, 1, s3Key, file);
+        return toMeta(entity);
     }
 
     public DomainFileMeta addVersion(String serviceId, String fileId, MultipartFile file) {
-        return domainFileStore.addVersion(qapilotDir(serviceId), fileId, bytes(file), contentType(file));
+        UUID svc = UUID.fromString(serviceId);
+        UUID fid = UUID.fromString(fileId);
+        DomainDocumentEntity latest = documentRepository.findFirstByFileIdOrderByVersionDesc(fid)
+                .orElseThrow(() -> new QapilotException(ErrorCode.FILE_001, "원본 파일을 찾을 수 없습니다."));
+        int nextVersion = latest.getVersion() + 1;
+        String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : latest.getFilename();
+        String s3Key = buildKey(svc, fid, nextVersion, filename);
+        s3Service.put(s3Key, bytes(file), contentType(file));
+        DomainDocumentEntity entity = save(svc, fid, filename, nextVersion, s3Key, file);
+        return toMeta(entity);
     }
 
     public DomainFileMeta update(String serviceId, String fileId, FileUpdateRequest request) {
-        return domainFileStore.update(qapilotDir(serviceId), fileId, request.name(), request.reflected());
+        UUID fid = UUID.fromString(fileId);
+        DomainDocumentEntity latest = documentRepository.findFirstByFileIdOrderByVersionDesc(fid)
+                .orElseThrow(() -> new QapilotException(ErrorCode.FILE_001));
+        if (request.name() != null && !request.name().isBlank()) {
+            latest.setFilename(request.name());
+        }
+        if (request.reflected() != null) {
+            latest.setReflected(request.reflected());
+        }
+        documentRepository.save(latest);
+        return toMeta(latest);
     }
 
     public void delete(String serviceId, String fileId) {
-        domainFileStore.delete(qapilotDir(serviceId), fileId);
+        UUID fid = UUID.fromString(fileId);
+        List<DomainDocumentEntity> versions = documentRepository.findAllByFileIdOrderByVersionDesc(fid);
+        if (versions.isEmpty()) {
+            throw new QapilotException(ErrorCode.FILE_001);
+        }
+        documentRepository.deleteAll(versions);
     }
 
     public List<String> versions(String serviceId, String fileId) {
-        return domainFileStore.versions(qapilotDir(serviceId), fileId);
+        UUID fid = UUID.fromString(fileId);
+        return documentRepository.findAllByFileIdOrderByVersionDesc(fid).stream()
+                .map(e -> "v" + e.getVersion())
+                .toList();
     }
 
     public Object diff(String serviceId, String fileId) {
-        return domainFileStore.diff(qapilotDir(serviceId), fileId);
+        // Phase 2 — 두 버전 사이의 diff. 현재는 빈 객체로 반환.
+        return java.util.Map.of("file_id", fileId, "diffs", List.of());
     }
 
-    private Path qapilotDir(String serviceId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
-        return Path.of(service.qapilotDir());
+    private DomainDocumentEntity save(UUID serviceId, UUID fileId, String filename, int version,
+                                       String s3Key, MultipartFile file) {
+        DomainDocumentEntity entity = new DomainDocumentEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setServiceId(serviceId);
+        entity.setFileId(fileId);
+        entity.setFilename(filename);
+        entity.setVersion(version);
+        entity.setS3Key(s3Key);
+        entity.setBytes(file.getSize());
+        entity.setMimeType(contentType(file));
+        documentRepository.save(entity);
+        return entity;
     }
 
-    private String filename(MultipartFile file) {
+    private DomainFileMeta toMeta(DomainDocumentEntity e) {
+        return new DomainFileMeta(
+                e.getFileId() != null ? e.getFileId().toString() : e.getId().toString(),
+                e.getFilename(),
+                "v" + e.getVersion(),
+                e.getVersion(),
+                e.isReflected(),
+                e.getUploadedAt() == null ? null : e.getUploadedAt().toString(),
+                e.getBytes() == null ? 0L : e.getBytes(),
+                e.getMimeType(),
+                e.getS3Key()
+        );
+    }
+
+    private String buildKey(UUID serviceId, UUID fileId, int version, String filename) {
+        return String.format("services/%s/domain/%s/v%d/%s", serviceId, fileId, version, filename);
+    }
+
+    private String requireFilename(MultipartFile file) {
         String name = file.getOriginalFilename();
         if (name == null || name.isBlank()) {
             throw new QapilotException(ErrorCode.COMMON_001, "파일명이 필요합니다.");

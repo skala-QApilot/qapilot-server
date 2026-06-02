@@ -7,11 +7,14 @@ import com.qapilot.server.run.dto.RunCreateRequest;
 import com.qapilot.server.run.dto.RunResponse;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.QapilotService;
-import com.qapilot.server.trace.TraceFileStore;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 /**
  * 테스트 실행 유스케이스.
@@ -23,17 +26,36 @@ import org.springframework.stereotype.Service;
 public class RunService {
 
     private final ServiceDomainService serviceDomainService;
-    private final TraceFileStore traceFileStore;
+    private final RunReader runReader;
     private final FastApiAgentClient fastApiAgentClient;
+    private final ReactiveStringRedisTemplate redisTemplate;
 
     public RunService(
             ServiceDomainService serviceDomainService,
-            TraceFileStore traceFileStore,
-            FastApiAgentClient fastApiAgentClient
+            RunReader runReader,
+            FastApiAgentClient fastApiAgentClient,
+            ReactiveStringRedisTemplate redisTemplate
     ) {
         this.serviceDomainService = serviceDomainService;
-        this.traceFileStore = traceFileStore;
+        this.runReader = runReader;
         this.fastApiAgentClient = fastApiAgentClient;
+        this.redisTemplate = redisTemplate;
+    }
+
+    /**
+     * `run:<runId>` Redis 채널을 구독하여 SSE 로 forward.
+     *
+     * <p>FastAPI worker 가 publish 한 status / annotate / tc_result / artifact 이벤트가
+     * Redis → 여기 → 브라우저 EventSource 로 흘러간다. 1초 폴링 대체.
+     */
+    public Flux<ServerSentEvent<String>> stream(String serviceId, String runId) {
+        // serviceId 는 접근권한 체크용 — 존재 안 하면 예외, 권한 없으면 401/403.
+        serviceDomainService.getById(serviceId);
+        return redisTemplate
+                .listenTo(ChannelTopic.of("run:" + runId))
+                .map(msg -> ServerSentEvent.<String>builder()
+                        .data(msg.getMessage())
+                        .build());
     }
 
     public RunResponse start(String serviceId, RunCreateRequest request) {
@@ -124,8 +146,8 @@ public class RunService {
     }
 
     private Map<String, Object> trace(String serviceId, String traceId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
-        return traceFileStore.findById(Path.of(service.qapilotDir()), traceId)
+        serviceDomainService.getById(serviceId);   // 존재/권한 체크
+        return runReader.findById(traceId)
                 .orElseThrow(() -> new QapilotException(ErrorCode.RUN_001));
     }
 
@@ -152,6 +174,6 @@ public class RunService {
 
     private List<Map<String, Object>> traces(String serviceId) {
         QapilotService service = serviceDomainService.getById(serviceId);
-        return traceFileStore.listAll(Path.of(service.qapilotDir()));
+        return runReader.listByServiceId(service.serviceId());
     }
 }

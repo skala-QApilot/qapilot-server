@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.common.files.JsonFileStore;
-import com.qapilot.server.trace.TraceFileStore;
+import com.qapilot.server.run.RunReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -26,11 +26,11 @@ public class ReportFileStore {
     };
 
     private final JsonFileStore jsonFileStore;
-    private final TraceFileStore traceFileStore;
+    private final RunReader runReader;       // PR-15d — fallback 으로 DB run 행에서 리포트 derive
 
-    public ReportFileStore(JsonFileStore jsonFileStore, TraceFileStore traceFileStore) {
+    public ReportFileStore(JsonFileStore jsonFileStore, RunReader runReader) {
         this.jsonFileStore = jsonFileStore;
-        this.traceFileStore = traceFileStore;
+        this.runReader = runReader;
     }
 
     public List<Map<String, Object>> list(Path qapilotDir) {
@@ -53,7 +53,7 @@ public class ReportFileStore {
         if (Files.exists(reportPath)) {
             return jsonFileStore.read(reportPath, MAP_TYPE);
         }
-        return traceFileStore.findById(qapilotDir, traceId)
+        return runReader.findById(traceId)
                 .map(this::buildFromTrace)
                 .orElseThrow(() -> new QapilotException(ErrorCode.REPORT_001));
     }

@@ -1,0 +1,79 @@
+# 로컬 개발용 인프라 — Postgres + Redis + MinIO(S3 호환).
+# 사용법:
+#   1) cp .env.example .env  (값 수정은 선택)
+#   2) docker compose up -d
+#   3) Spring/FastAPI 띄울 때 .env 값을 환경변수로 주입
+#
+# 운영(AWS) 에서는 RDS / ElastiCache / S3 로 대체 — 같은 환경변수만 다른 endpoint 가리킴.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qapilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-qapilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qapilot}
+      POSTGRES_DB: ${POSTGRES_DB:-qapilot}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - qapilot-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qapilot} -d ${POSTGRES_DB:-qapilot}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: qapilot-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - qapilot-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: qapilot-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"     # S3 API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001" # Web UI
+    volumes:
+      - qapilot-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # 부팅 시 1회 실행 — qapilot-local 버킷 자동 생성.
+  minio-bucket-init:
+    image: minio/mc:latest
+    container_name: qapilot-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} &&
+      mc mb --ignore-existing local/${S3_BUCKET:-qapilot-local} &&
+      echo 'MinIO bucket ${S3_BUCKET:-qapilot-local} ready.'
+      "
+    restart: "no"
+
+volumes:
+  qapilot-pg-data:
+  qapilot-redis-data:
+  qapilot-minio-data:
