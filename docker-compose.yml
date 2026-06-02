@@ -73,7 +73,17 @@ services:
       "
     restart: "no"
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qapilot-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qapilot-qdrant-data:/qdrant/storage
+
 volumes:
   qapilot-pg-data:
   qapilot-redis-data:
   qapilot-minio-data:
+  qapilot-qdrant-data:
