@@ -4,16 +4,18 @@ import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.result.dto.ResultResponse;
 import com.qapilot.server.result.dto.ResultStatisticsResponse;
+import com.qapilot.server.run.RunReader;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.QapilotService;
-import com.qapilot.server.trace.TraceFileStore;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 
 /**
  * trace 기반 결과 조회 유스케이스.
+ *
+ * <p>PR-15c — file → DB read 전환. ResultResponse.fromTrace 가 보는 Map 구조는
+ * RunReader 가 그대로 재현 (tc_results 는 tc_results 테이블에서 ui kind 만 추출).
  *
  * <p>Author: C
  * <br>Created: 2026-05-18
@@ -22,11 +24,11 @@ import org.springframework.stereotype.Service;
 public class ResultQueryService {
 
     private final ServiceDomainService serviceDomainService;
-    private final TraceFileStore traceFileStore;
+    private final RunReader runReader;
 
-    public ResultQueryService(ServiceDomainService serviceDomainService, TraceFileStore traceFileStore) {
+    public ResultQueryService(ServiceDomainService serviceDomainService, RunReader runReader) {
         this.serviceDomainService = serviceDomainService;
-        this.traceFileStore = traceFileStore;
+        this.runReader = runReader;
     }
 
     public List<ResultResponse> list(String serviceId, String status, int limit, int offset) {
@@ -45,11 +47,13 @@ public class ResultQueryService {
 
     public ResultResponse get(String serviceId, String traceId) {
         QapilotService service = serviceDomainService.getById(serviceId);
-        Map<String, Object> trace = traceFileStore.findById(Path.of(service.qapilotDir()), traceId)
+        Map<String, Object> trace = runReader.findById(traceId)
                 .orElseThrow(() -> new QapilotException(ErrorCode.RESULT_001));
         if (!"test".equals(trace.get("command"))) {
             throw new QapilotException(ErrorCode.RESULT_001);
         }
+        // service 존재만 확인하고 별 사용 없음 — 호환 유지를 위해 호출
+        service.serviceId();
         return ResultResponse.fromTrace(trace);
     }
 
@@ -64,7 +68,7 @@ public class ResultQueryService {
 
     public List<ResultResponse> allResults(String serviceId) {
         QapilotService service = serviceDomainService.getById(serviceId);
-        return traceFileStore.listAll(Path.of(service.qapilotDir())).stream()
+        return runReader.listByServiceId(service.serviceId()).stream()
                 .filter(trace -> "test".equals(trace.get("command")))
                 .map(ResultResponse::fromTrace)
                 .toList();
