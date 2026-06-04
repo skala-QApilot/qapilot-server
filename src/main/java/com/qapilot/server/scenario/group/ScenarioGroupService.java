@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 /**
  * 시나리오 그룹 관리. PR-16 — JPA only.
  *
- * <p>scenarioIds / tcIds 는 scenario_group_members 같은 별 테이블 대신 inline JSONB 컬럼 사용.
+ * <p>scenarioIds / tcIds 는 inline JSONB 컬럼 사용 (별 join 테이블 없음).
  * schedule (cron/timezone/enabled/createdAt) 도 inline 컬럼.
  *
  * <p>Author: C
