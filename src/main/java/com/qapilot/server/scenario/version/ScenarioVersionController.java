@@ -70,4 +70,14 @@ public class ScenarioVersionController {
     ) {
         return ApiResponse.ok(Map.of("diff", versionService.diff(serviceId, versionId)));
     }
+
+    /** 박힌 마일스톤의 시나리오들을 현재 작업 상태로 복원 (각 ts 의 새 version_number INSERT). */
+    @PostMapping("/{versionId}/restore")
+    public ApiResponse<Map<String, Object>> restore(
+            @PathVariable String serviceId,
+            @PathVariable String versionId
+    ) {
+        int restored = versionService.restore(serviceId, versionId);
+        return ApiResponse.ok(Map.of("restoredCount", restored));
+    }
 }

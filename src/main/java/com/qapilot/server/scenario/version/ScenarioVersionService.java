@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.scenario.ScenarioReader;
+import com.qapilot.server.scenario.ScenarioWriter;
 import com.qapilot.server.scenario.version.domain.ScenarioVersion;
 import com.qapilot.server.scenario.version.dto.CreateScenarioVersionRequest;
 import com.qapilot.server.scenario.version.dto.UpdateScenarioVersionRequest;
@@ -33,15 +34,18 @@ public class ScenarioVersionService {
     private static final TypeReference<List<Map<String, Object>>> SNAPSHOT_TYPE = new TypeReference<>() {};
 
     private final ScenarioReader scenarioReader;
+    private final ScenarioWriter scenarioWriter;
     private final ScenarioVersionRepository versionRepository;
     private final ObjectMapper objectMapper;
 
     public ScenarioVersionService(
             ScenarioReader scenarioReader,
+            ScenarioWriter scenarioWriter,
             ScenarioVersionRepository versionRepository,
             ObjectMapper objectMapper
     ) {
         this.scenarioReader = scenarioReader;
+        this.scenarioWriter = scenarioWriter;
         this.versionRepository = versionRepository;
         this.objectMapper = objectMapper;
     }
@@ -83,6 +87,25 @@ public class ScenarioVersionService {
     public void delete(String serviceId, String versionId) {
         ScenarioVersionEntity entity = requireEntity(serviceId, versionId);
         versionRepository.delete(entity);
+    }
+
+    /**
+     * 박힌 마일스톤의 시나리오들을 현재 작업 상태로 복원.
+     * 각 ts_id 별로 scenarios 에 새 version_number = MAX+1 row 를 INSERT (이력 보존).
+     *
+     * @return 복원된 시나리오 개수
+     */
+    public int restore(String serviceId, String versionId) {
+        ScenarioVersionEntity entity = requireEntity(serviceId, versionId);
+        List<Map<String, Object>> scenarios = fromJson(entity.getScenariosPayload());
+        int restored = 0;
+        for (Map<String, Object> ts : scenarios) {
+            Object tsIdObj = ts.get("ts_id");
+            if (tsIdObj == null) continue;
+            scenarioWriter.upsertVersion(serviceId, String.valueOf(tsIdObj), ts);
+            restored += 1;
+        }
+        return restored;
     }
 
     public Map<String, Object> diff(String serviceId, String versionId) {
