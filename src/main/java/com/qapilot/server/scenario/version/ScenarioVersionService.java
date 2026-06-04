@@ -8,8 +8,8 @@ import com.qapilot.server.scenario.ScenarioReader;
 import com.qapilot.server.scenario.version.domain.ScenarioVersion;
 import com.qapilot.server.scenario.version.dto.CreateScenarioVersionRequest;
 import com.qapilot.server.scenario.version.dto.UpdateScenarioVersionRequest;
-import com.qapilot.server.scenario.version.persistence.ScenarioSnapshotEntity;
-import com.qapilot.server.scenario.version.persistence.ScenarioSnapshotRepository;
+import com.qapilot.server.scenario.version.persistence.ScenarioVersionEntity;
+import com.qapilot.server.scenario.version.persistence.ScenarioVersionRepository;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,21 +33,21 @@ public class ScenarioVersionService {
     private static final TypeReference<List<Map<String, Object>>> SNAPSHOT_TYPE = new TypeReference<>() {};
 
     private final ScenarioReader scenarioReader;
-    private final ScenarioSnapshotRepository snapshotRepository;
+    private final ScenarioVersionRepository versionRepository;
     private final ObjectMapper objectMapper;
 
     public ScenarioVersionService(
             ScenarioReader scenarioReader,
-            ScenarioSnapshotRepository snapshotRepository,
+            ScenarioVersionRepository versionRepository,
             ObjectMapper objectMapper
     ) {
         this.scenarioReader = scenarioReader;
-        this.snapshotRepository = snapshotRepository;
+        this.versionRepository = versionRepository;
         this.objectMapper = objectMapper;
     }
 
     public List<ScenarioVersion> list(String serviceId) {
-        return snapshotRepository.findAllByServiceIdOrderByCreatedAtDesc(UUID.fromString(serviceId)).stream()
+        return versionRepository.findAllByServiceIdOrderByCreatedAtDesc(UUID.fromString(serviceId)).stream()
                 .map(this::toDomain)
                 .toList();
     }
@@ -57,43 +57,43 @@ public class ScenarioVersionService {
             throw new QapilotException(ErrorCode.COMMON_001, "label 필드가 필요합니다.");
         }
         List<Map<String, Object>> snapshot = scenarioReader.listByServiceId(serviceId);
-        ScenarioSnapshotEntity entity = new ScenarioSnapshotEntity();
+        ScenarioVersionEntity entity = new ScenarioVersionEntity();
         entity.setId(UUID.randomUUID());
         entity.setServiceId(UUID.fromString(serviceId));
         entity.setLabel(request.label());
         entity.setDescription(request.description() == null ? "" : request.description());
         entity.setScenariosPayload(toJson(snapshot));
         entity.setFavorite(false);
-        snapshotRepository.save(entity);
+        versionRepository.save(entity);
         return toDomain(entity);
     }
 
     public ScenarioVersion update(String serviceId, String versionId, UpdateScenarioVersionRequest request) {
-        ScenarioSnapshotEntity entity = requireEntity(serviceId, versionId);
+        ScenarioVersionEntity entity = requireEntity(serviceId, versionId);
         if (request.label() != null) {
             entity.setLabel(request.label());
         }
         if (request.isFavorite() != null) {
             entity.setFavorite(request.isFavorite());
         }
-        snapshotRepository.save(entity);
+        versionRepository.save(entity);
         return toDomain(entity);
     }
 
     public void delete(String serviceId, String versionId) {
-        ScenarioSnapshotEntity entity = requireEntity(serviceId, versionId);
-        snapshotRepository.delete(entity);
+        ScenarioVersionEntity entity = requireEntity(serviceId, versionId);
+        versionRepository.delete(entity);
     }
 
     public Map<String, Object> diff(String serviceId, String versionId) {
-        ScenarioSnapshotEntity current = requireEntity(serviceId, versionId);
-        List<ScenarioSnapshotEntity> all = snapshotRepository
+        ScenarioVersionEntity current = requireEntity(serviceId, versionId);
+        List<ScenarioVersionEntity> all = versionRepository
                 .findAllByServiceIdOrderByCreatedAtDesc(UUID.fromString(serviceId));
         int idx = -1;
         for (int i = 0; i < all.size(); i++) {
             if (all.get(i).getId().equals(current.getId())) { idx = i; break; }
         }
-        ScenarioSnapshotEntity previous = (idx >= 0 && idx + 1 < all.size()) ? all.get(idx + 1) : null;
+        ScenarioVersionEntity previous = (idx >= 0 && idx + 1 < all.size()) ? all.get(idx + 1) : null;
 
         Set<String> currentIds = tsIds(fromJson(current.getScenariosPayload()));
         Set<String> previousIds = previous != null ? tsIds(fromJson(previous.getScenariosPayload())) : Set.of();
@@ -113,9 +113,9 @@ public class ScenarioVersionService {
         return Map.of("added", added, "removed", removed, "modified", modified);
     }
 
-    private ScenarioSnapshotEntity requireEntity(String serviceId, String versionId) {
+    private ScenarioVersionEntity requireEntity(String serviceId, String versionId) {
         try {
-            Optional<ScenarioSnapshotEntity> opt = snapshotRepository.findById(UUID.fromString(versionId));
+            Optional<ScenarioVersionEntity> opt = versionRepository.findById(UUID.fromString(versionId));
             if (opt.isEmpty() || !opt.get().getServiceId().equals(UUID.fromString(serviceId))) {
                 throw new QapilotException(ErrorCode.SCENARIO_001);
             }
@@ -125,7 +125,7 @@ public class ScenarioVersionService {
         }
     }
 
-    private ScenarioVersion toDomain(ScenarioSnapshotEntity e) {
+    private ScenarioVersion toDomain(ScenarioVersionEntity e) {
         return new ScenarioVersion(
                 e.getId().toString(),
                 e.getServiceId().toString(),

@@ -14,20 +14,20 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * scenario_snapshots 테이블. PR-16.
+ * scenario_versions 테이블 — 사용자 명시 마일스톤.
  *
- * <p>사용자가 명시 저장하는 "전체 시나리오 집합의 한 시점 스냅샷".
- * scenario_versions 와 이름 헷갈리지 말 것 — 별도 개념.
+ * <p>"service 의 시나리오 N개를 통째로 박제한 한 시점" 을 저장한다. label/description/즐겨찾기 메타.
+ * 자동 작업 이력 (per-scenario revision) 은 scenarios 테이블의 version_number 컬럼이 담당한다.
  *
  * <p>Author: C
- * <br>Created: 2026-06-02
+ * <br>Created: 2026-06-02, renamed 2026-06-04 (V15)
  */
 @Entity
-@Table(name = "scenario_snapshots")
+@Table(name = "scenario_versions")
 @Getter
 @Setter
 @NoArgsConstructor
-public class ScenarioSnapshotEntity {
+public class ScenarioVersionEntity {
 
     @Id
     private UUID id;

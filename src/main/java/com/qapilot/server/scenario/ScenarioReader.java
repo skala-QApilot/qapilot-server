@@ -16,20 +16,13 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /**
- * scenarios + scenario_versions (DB) → 기존 파일 기반 시나리오 Map 형태로 변환하는 read 어댑터.
+ * scenarios (통합 DB) → 기존 파일 기반 시나리오 Map 형태로 변환하는 read 어댑터.
  *
- * <p>호출자(ScenarioService 등) 가 의존하던 raw 시나리오 JSON 의 Map 구조를 유지하면서
- * 데이터 출처만 file → DB 로 갈아끼운다. (PR-15d)
- *
- * <p>변환:
- * <ul>
- *   <li>scenario_versions.payload (JSONB) 를 최상위 Map 으로 decode</li>
- *   <li>ts_id 는 scenarios 행에서 (payload 의 ts_id 가 있어도 사용)</li>
- *   <li>current_version_id 기준 — UPSERT 마다 새 version 이 current 가 됨</li>
- * </ul>
+ * <p>V15 이후 scenarios 한 테이블에 (ts_id, version_number, payload, is_deleted) 가 모두 들어 있다.
+ * latest = service_id 별 ts_id 그룹 안에서 version_number DESC 1 (is_deleted=false).
  *
  * <p>Author: C
- * <br>Created: 2026-06-02
+ * <br>Created: 2026-06-02, V15 통합 적용 2026-06-04
  */
 @Component
 public class ScenarioReader {
@@ -54,10 +47,10 @@ public class ScenarioReader {
         }
         @SuppressWarnings("unchecked")
         List<Object[]> rows = em.createNativeQuery(
-                "SELECT s.ts_id, sv.payload::text " +
-                "FROM scenarios s JOIN scenario_versions sv ON sv.id = s.current_version_id " +
-                "WHERE s.service_id = :svc " +
-                "ORDER BY s.ts_id"
+                "SELECT DISTINCT ON (ts_id) ts_id, payload::text " +
+                "FROM scenarios " +
+                "WHERE service_id = :svc AND is_deleted = false " +
+                "ORDER BY ts_id, version_number DESC"
         ).setParameter("svc", serviceId).getResultList();
 
         List<Map<String, Object>> result = new ArrayList<>(rows.size());
@@ -80,9 +73,10 @@ public class ScenarioReader {
         }
         @SuppressWarnings("unchecked")
         List<Object[]> rows = em.createNativeQuery(
-                "SELECT s.ts_id, sv.payload::text " +
-                "FROM scenarios s JOIN scenario_versions sv ON sv.id = s.current_version_id " +
-                "WHERE s.service_id = :svc AND s.ts_id = :ts"
+                "SELECT ts_id, payload::text " +
+                "FROM scenarios " +
+                "WHERE service_id = :svc AND ts_id = :ts AND is_deleted = false " +
+                "ORDER BY version_number DESC LIMIT 1"
         ).setParameter("svc", serviceId).setParameter("ts", tsId).getResultList();
 
         if (rows.isEmpty()) {
