@@ -1,6 +1,7 @@
 package com.qapilot.server.run.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -16,7 +17,8 @@ public record RunResponse(
         @JsonProperty("startTime") String startTime,
         @JsonProperty("completedAt") String completedAt,
         String error,
-        @JsonProperty("result_summary") Map<String, Object> resultSummary
+        @JsonProperty("result_summary") Map<String, Object> resultSummary,
+        @JsonProperty("scenario_ids") List<String> scenarioIds
 ) {
     @SuppressWarnings("unchecked")
     public static RunResponse fromTrace(Map<String, Object> trace) {
@@ -26,6 +28,10 @@ public record RunResponse(
         Map<String, Object> resultSummary = summary instanceof Map<?, ?> map
                 ? (Map<String, Object>) map
                 : Map.of();
+        Object ids = trace.get("scenario_ids");
+        List<String> scenarioIds = ids instanceof List<?> list
+                ? list.stream().map(RunResponse::stringValue).toList()
+                : null;
         return new RunResponse(
                 traceId,
                 command + " - " + traceId.substring(0, Math.min(8, traceId.length())),
@@ -33,13 +39,14 @@ public record RunResponse(
                 stringValue(trace.get("started_at")),
                 stringValue(trace.get("completed_at")),
                 nullableString(trace.get("error")),
-                resultSummary
+                resultSummary,
+                scenarioIds
         );
     }
 
     public static RunResponse running(String traceId) {
         return new RunResponse(traceId, "test - " + traceId.substring(0, Math.min(8, traceId.length())),
-                "running", null, null, null, Map.of());
+                "running", null, null, null, Map.of(), null);
     }
 
     private static String stringValue(Object value) {
