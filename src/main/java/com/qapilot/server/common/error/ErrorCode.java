@@ -56,7 +56,9 @@ public enum ErrorCode {
     CHANGE_REQUEST_001("CHANGE_REQUEST_001", "변경 요청을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     CHANGE_REQUEST_002("CHANGE_REQUEST_002", "유효하지 않은 status 값입니다.", HttpStatus.BAD_REQUEST),
     RETEST_001("RETEST_001", "재테스트 그룹을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
-    RETEST_002("RETEST_002", "failedTcIds가 필요합니다.", HttpStatus.BAD_REQUEST);
+    RETEST_002("RETEST_002", "failedTcIds가 필요합니다.", HttpStatus.BAD_REQUEST),
+    DEFECT_001("DEFECT_001", "결함을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    DEFECT_002("DEFECT_002", "유효하지 않은 결함 status 값입니다.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String defaultMessage;
