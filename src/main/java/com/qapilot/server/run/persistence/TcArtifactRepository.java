@@ -11,4 +11,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface TcArtifactRepository extends JpaRepository<TcArtifactEntity, UUID> {
 
     List<TcArtifactEntity> findAllByTcResultIdOrderByStepIndexAsc(UUID tcResultId);
+
+    java.util.Optional<TcArtifactEntity> findFirstByTcResultIdAndStepIndexAndKind(
+            UUID tcResultId, int stepIndex, String kind);
 }

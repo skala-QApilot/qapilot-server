@@ -13,4 +13,7 @@ public interface TcResultRepository extends JpaRepository<TcResultEntity, UUID> 
     List<TcResultEntity> findAllByRunId(UUID runId);
 
     long countByRunIdAndStatus(UUID runId, String status);
+
+    java.util.Optional<TcResultEntity> findFirstByRunIdAndTsIdAndTcIdAndKind(
+            UUID runId, String tsId, String tcId, String kind);
 }
