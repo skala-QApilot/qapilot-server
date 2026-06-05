@@ -37,9 +37,12 @@ public class DefectController {
     @GetMapping
     public ApiResponse<Map<String, Object>> list(
             @PathVariable String serviceId,
-            @RequestParam(required = false) String status
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false, name = "run_id") String runId
     ) {
-        List<Defect> defects = defectService.list(serviceId, status);
+        List<Defect> defects = runId != null
+                ? defectService.listByRun(serviceId, runId)
+                : defectService.list(serviceId, status);
         return ApiResponse.ok(Map.of("defects", defects, "count", defects.size()));
     }
 

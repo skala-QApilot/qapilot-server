@@ -37,6 +37,16 @@ public class DefectService {
         return entities.stream().map(this::toDomain).toList();
     }
 
+    /** 특정 run 의 결함만 — TestResultPage 가 trace_id 단위로 호출. */
+    public List<Defect> listByRun(String serviceId, String runId) {
+        UUID svc = UUID.fromString(serviceId);
+        UUID run = UUID.fromString(runId);
+        return defectRepository.findAllByRunIdOrderByCreatedAtDesc(run).stream()
+                .filter(e -> e.getServiceId().equals(svc))
+                .map(this::toDomain)
+                .toList();
+    }
+
     public Defect create(String serviceId, CreateDefectRequest request) {
         DefectEntity entity = new DefectEntity();
         entity.setId(UUID.randomUUID());
