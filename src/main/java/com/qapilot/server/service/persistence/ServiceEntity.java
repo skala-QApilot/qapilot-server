@@ -42,9 +42,6 @@ public class ServiceEntity {
     @Column(name = "target_root")
     private String targetRoot;
 
-    @Column(name = "qapilot_dir")
-    private String qapilotDir;
-
     @Column(name = "dashboard_url")
     private String dashboardUrl;
 

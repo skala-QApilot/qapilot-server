@@ -17,7 +17,6 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ScenarioGenerationRequest(
         @JsonProperty("service_id") String serviceId,
-        @JsonProperty("qapilot_dir") String qapilotDir,
         String trigger,
         @JsonProperty("user_input") String userInput,
         @JsonProperty("scenario_ids") List<String> scenarioIds,

@@ -104,7 +104,6 @@ public class ServiceDomainService {
         entity.setDisplayName(name);
         entity.setDescription(request.description() == null ? "" : request.description());
         entity.setTargetRoot(targetRoot.toString());
-        entity.setQapilotDir(qapilotDir.toString());
         entity.setDashboardUrl(dashboardUrl(slug));
         entity.setServerAuthToken(generateServerAuthToken());
         entity.setTokenIssuedAt(nowInstant);

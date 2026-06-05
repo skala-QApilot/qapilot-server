@@ -7,7 +7,6 @@ import com.qapilot.server.run.dto.RunCreateRequest;
 import com.qapilot.server.run.dto.RunResponse;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.QapilotService;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
@@ -62,7 +61,6 @@ public class RunService {
         QapilotService service = serviceDomainService.getById(serviceId);
         String traceId = fastApiAgentClient.startTestRun(
                 service.serviceId(),
-                service.qapilotDir(),
                 request.scenarioIds(),
                 request.filter() == null || request.filter().isBlank() ? "all" : request.filter(),
                 request.tags(),
@@ -102,11 +100,11 @@ public class RunService {
         );
     }
 
-    /** Layer 2 디스크 results 스캔 결과. UI 의 1초 폴링이 호출. */
+    /** Layer 2 진행 상황 — DB tc_results 조회. */
     @SuppressWarnings("unchecked")
     public Map<String, Object> runProgress(String serviceId, String runId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
-        Map<String, Object> response = fastApiAgentClient.runProgress(runId, service.qapilotDir());
+        serviceDomainService.getById(serviceId);
+        Map<String, Object> response = fastApiAgentClient.runProgress(runId);
         Object data = response == null ? null : response.get("data");
         if (data instanceof Map<?, ?> dataMap) {
             return (Map<String, Object>) dataMap;
@@ -116,15 +114,15 @@ public class RunService {
 
     /** 가장 최근 PNG 스크린샷 bytes. 없으면 null. */
     public byte[] latestScreenshot(String serviceId, String runId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
-        return fastApiAgentClient.latestScreenshot(runId, service.qapilotDir());
+        serviceDomainService.getById(serviceId);
+        return fastApiAgentClient.latestScreenshot(runId);
     }
 
     /** 중단된 trace 를 같은 trace_id 로 재개 — 새 trace 만들지 않음. */
     @SuppressWarnings("unchecked")
     public Map<String, Object> resume(String serviceId, String runId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
-        Map<String, Object> response = fastApiAgentClient.resumeRun(runId, service.qapilotDir());
+        serviceDomainService.getById(serviceId);
+        Map<String, Object> response = fastApiAgentClient.resumeRun(runId);
         Object data = response == null ? null : response.get("data");
         if (data instanceof Map<?, ?> dataMap) {
             return (Map<String, Object>) dataMap;
@@ -133,14 +131,13 @@ public class RunService {
     }
 
     /** 진행 중인 파이프라인을 즉시 중단 — trace.status → "aborted". */
+    @SuppressWarnings("unchecked")
     public Map<String, Object> stop(String serviceId, String runId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
-        Map<String, Object> response = fastApiAgentClient.stopRun(runId, service.qapilotDir());
+        serviceDomainService.getById(serviceId);
+        Map<String, Object> response = fastApiAgentClient.stopRun(runId);
         Object data = response == null ? null : response.get("data");
         if (data instanceof Map<?, ?> dataMap) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> result = (Map<String, Object>) dataMap;
-            return result;
+            return (Map<String, Object>) dataMap;
         }
         return Map.of("trace_id", runId, "status", "unknown");
     }
@@ -153,9 +150,9 @@ public class RunService {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> traceWithPolling(String serviceId, String traceId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
+        serviceDomainService.getById(serviceId);
         try {
-            Map<String, Object> response = fastApiAgentClient.trace(traceId, service.qapilotDir());
+            Map<String, Object> response = fastApiAgentClient.trace(traceId);
             Object data = response == null ? null : response.get("data");
             if (data instanceof Map<?, ?> dataMap && dataMap.get("trace") instanceof Map<?, ?> trace) {
                 return (Map<String, Object>) trace;

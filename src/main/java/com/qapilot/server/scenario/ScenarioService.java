@@ -2,9 +2,6 @@ package com.qapilot.server.scenario;
 
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
-import com.qapilot.server.service.ServiceDomainService;
-import com.qapilot.server.service.domain.QapilotService;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,20 +22,17 @@ public class ScenarioService {
             "ts_id", "name", "description", "trigger", "affected_files", "domain_rules_used", "test_cases"
     );
 
-    private final ServiceDomainService serviceDomainService;
     private final ScenarioReader scenarioReader;
     private final ScenarioWriter scenarioWriter;
     private final ScenarioStatusAggregator statusAggregator;
     private final ScenarioPendingChangesResolver pendingChangesResolver;
 
     public ScenarioService(
-            ServiceDomainService serviceDomainService,
             ScenarioReader scenarioReader,
             ScenarioWriter scenarioWriter,
             ScenarioStatusAggregator statusAggregator,
             ScenarioPendingChangesResolver pendingChangesResolver
     ) {
-        this.serviceDomainService = serviceDomainService;
         this.scenarioReader = scenarioReader;
         this.scenarioWriter = scenarioWriter;
         this.statusAggregator = statusAggregator;
@@ -46,10 +40,9 @@ public class ScenarioService {
     }
 
     public List<Map<String, Object>> list(String serviceId, String search, String trigger) {
-        Path qapilotDir = qapilotDir(serviceId);
         Map<String, ScenarioStatusAggregator.RunStatus> scenarioStatuses =
-                statusAggregator.scenarioStatuses(qapilotDir);
-        Set<String> pendingScenarioIds = pendingChangesResolver.scenariosWithPendingChanges(qapilotDir);
+                statusAggregator.scenarioStatuses(serviceId);
+        Set<String> pendingScenarioIds = pendingChangesResolver.scenariosWithPendingChanges(serviceId);
 
         List<Map<String, Object>> result = new ArrayList<>();
         for (Map<String, Object> scenario : scenarioReader.listByServiceId(serviceId)) {
@@ -68,17 +61,15 @@ public class ScenarioService {
     }
 
     public Map<String, Object> get(String serviceId, String scenarioId) {
-        Path qapilotDir = qapilotDir(serviceId);
         Map<String, Object> scenario = scenarioReader.requireByServiceIdAndTsId(serviceId, scenarioId);
         return enrichScenario(
                 scenario,
-                statusAggregator.scenarioStatuses(qapilotDir),
-                pendingChangesResolver.scenariosWithPendingChanges(qapilotDir)
+                statusAggregator.scenarioStatuses(serviceId),
+                pendingChangesResolver.scenariosWithPendingChanges(serviceId)
         );
     }
 
     public Map<String, Object> update(String serviceId, String scenarioId, Map<String, Object> patch) {
-        Path qapilotDir = qapilotDir(serviceId);
         Map<String, Object> current = new LinkedHashMap<>(
                 scenarioReader.requireByServiceIdAndTsId(serviceId, scenarioId));
         current.putAll(patch);
@@ -89,8 +80,8 @@ public class ScenarioService {
         scenarioWriter.upsertVersion(serviceId, scenarioId, current);
         return enrichScenario(
                 current,
-                statusAggregator.scenarioStatuses(qapilotDir),
-                pendingChangesResolver.scenariosWithPendingChanges(qapilotDir)
+                statusAggregator.scenarioStatuses(serviceId),
+                pendingChangesResolver.scenariosWithPendingChanges(serviceId)
         );
     }
 
@@ -100,14 +91,13 @@ public class ScenarioService {
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> testCases(String serviceId, String scenarioId) {
-        Path qapilotDir = qapilotDir(serviceId);
         Map<String, Object> raw = scenarioReader.requireByServiceIdAndTsId(serviceId, scenarioId);
         Object value = raw.get("test_cases");
         if (!(value instanceof List<?> list)) {
             return List.of();
         }
         Map<String, ScenarioStatusAggregator.RunStatus> tcStatuses =
-                statusAggregator.testCaseStatuses(qapilotDir);
+                statusAggregator.testCaseStatuses(serviceId);
         List<Map<String, Object>> enriched = new ArrayList<>(list.size());
         for (Object item : list) {
             if (item instanceof Map<?, ?> map) {
@@ -115,11 +105,6 @@ public class ScenarioService {
             }
         }
         return enriched;
-    }
-
-    private Path qapilotDir(String serviceId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
-        return Path.of(service.qapilotDir());
     }
 
     private Map<String, Object> enrichScenario(

@@ -9,9 +9,6 @@ import com.qapilot.server.rtm.domain.RtmSummary;
 import com.qapilot.server.rtm.domain.RtmVersion;
 import com.qapilot.server.rtm.dto.CreateRtmVersionRequest;
 import com.qapilot.server.scenario.ScenarioStatusAggregator;
-import com.qapilot.server.service.ServiceDomainService;
-import com.qapilot.server.service.domain.QapilotService;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,24 +26,20 @@ import org.springframework.stereotype.Service;
 @Service
 public class RtmService {
 
-    private final ServiceDomainService serviceDomainService;
     private final RtmReader rtmReader;
     private final ObjectMapper objectMapper;
     private final ScenarioStatusAggregator scenarioStatusAggregator;
 
-    public RtmService(ServiceDomainService serviceDomainService,
-                      RtmReader rtmReader, ObjectMapper objectMapper,
+    public RtmService(RtmReader rtmReader, ObjectMapper objectMapper,
                       ScenarioStatusAggregator scenarioStatusAggregator) {
-        this.serviceDomainService = serviceDomainService;
         this.rtmReader = rtmReader;
         this.objectMapper = objectMapper;
         this.scenarioStatusAggregator = scenarioStatusAggregator;
     }
 
     public List<RtmVersion> list(String serviceId) {
-        Path qapilotDir = qapilotDir(serviceId);
         Map<String, ScenarioStatusAggregator.RunStatus> tcStatuses =
-                scenarioStatusAggregator.testCaseStatuses(qapilotDir);
+                scenarioStatusAggregator.testCaseStatuses(serviceId);
         // PR-15e — file → DB read. RtmReader 가 versions + requirements + tc_links JOIN 한 결과 반환.
         return rtmReader.listByServiceId(serviceId).stream()
                 .map(version -> enrichVersion(version, tcStatuses))
@@ -64,10 +57,9 @@ public class RtmService {
     }
 
     public RtmVersion get(String serviceId, String rtmVersionId) {
-        Path qapilotDir = qapilotDir(serviceId);
         RtmVersion version = rtmReader.findById(serviceId, rtmVersionId)
                 .orElseThrow(() -> new QapilotException(ErrorCode.RTM_001));
-        return enrichVersion(version, scenarioStatusAggregator.testCaseStatuses(qapilotDir));
+        return enrichVersion(version, scenarioStatusAggregator.testCaseStatuses(serviceId));
     }
 
     public List<RtmRequirement> getRequirements(String serviceId, String rtmVersionId) {
@@ -163,8 +155,4 @@ public class RtmService {
         );
     }
 
-    private Path qapilotDir(String serviceId) {
-        QapilotService service = serviceDomainService.getById(serviceId);
-        return Path.of(service.qapilotDir());
-    }
 }

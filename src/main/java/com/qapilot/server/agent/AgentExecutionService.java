@@ -32,7 +32,6 @@ public class AgentExecutionService {
         QapilotService service = serviceDomainService.getById(serviceId);
         String traceId = fastApiAgentClient.startScenarioGeneration(
                 service.serviceId(),
-                service.qapilotDir(),
                 request.trigger(),
                 request.userInput(),
                 request.scenarioIds(),
@@ -47,7 +46,6 @@ public class AgentExecutionService {
         QapilotService service = serviceDomainService.getById(serviceId);
         String traceId = fastApiAgentClient.startCodeChangeDetection(
                 service.serviceId(),
-                service.qapilotDir(),
                 service.repos()
         );
         return AgentStartResponse.running(traceId);
@@ -57,7 +55,6 @@ public class AgentExecutionService {
         QapilotService service = serviceDomainService.getById(serviceId);
         String traceId = fastApiAgentClient.startCodeGeneration(
                 service.serviceId(),
-                service.qapilotDir(),
                 request == null ? null : request.scenarioIds()
         );
         return AgentStartResponse.running(traceId);

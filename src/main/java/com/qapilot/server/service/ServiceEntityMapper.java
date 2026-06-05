@@ -34,7 +34,7 @@ public class ServiceEntityMapper {
                 entity.getDisplayName(),
                 entity.getDescription() == null ? "" : entity.getDescription(),
                 entity.getTargetRoot(),
-                entity.getQapilotDir(),
+                computeQapilotDir(entity.getTargetRoot(), entity.getSlug()),
                 entity.getDashboardUrl(),
                 entity.getServerAuthToken(),
                 toIso(entity.getTokenIssuedAt()),
@@ -61,6 +61,13 @@ public class ServiceEntityMapper {
             repos.add(new RepoConfig((String) r[0], (String) r[3], (String) r[1], (String) r[2]));
         }
         return repos;
+    }
+
+    private static String computeQapilotDir(String targetRoot, String slug) {
+        if (targetRoot == null || targetRoot.isBlank()) {
+            return null;
+        }
+        return targetRoot + "/.qapilot/" + slug;
     }
 
     private String toIso(Instant instant) {

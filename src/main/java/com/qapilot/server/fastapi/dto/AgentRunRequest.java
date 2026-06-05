@@ -13,7 +13,6 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record AgentRunRequest(
         @JsonProperty("service_id") String serviceId,
-        @JsonProperty("qapilot_dir") String qapilotDir,
         @JsonProperty("scenario_ids") List<String> scenarioIds,
         String filter,
         List<String> tags,

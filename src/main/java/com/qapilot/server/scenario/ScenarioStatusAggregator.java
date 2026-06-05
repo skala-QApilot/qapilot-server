@@ -1,9 +1,7 @@
 package com.qapilot.server.scenario;
 
-import com.qapilot.server.service.persistence.ServiceJpaRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -29,31 +27,25 @@ import org.springframework.stereotype.Component;
 @Component
 public class ScenarioStatusAggregator {
 
-    private final ServiceJpaRepository serviceJpaRepository;
-
     @PersistenceContext
     private EntityManager em;
 
-    public ScenarioStatusAggregator(ServiceJpaRepository serviceJpaRepository) {
-        this.serviceJpaRepository = serviceJpaRepository;
-    }
-
     /** ts_id 별 최근 실행 status (entry 없으면 한 번도 실행 안 됨). */
-    public Map<String, RunStatus> scenarioStatuses(Path qapilotDir) {
-        UUID serviceId = serviceIdFromQapilotDir(qapilotDir);
-        if (serviceId == null) {
+    public Map<String, RunStatus> scenarioStatuses(String serviceId) {
+        UUID parsed = parseServiceId(serviceId);
+        if (parsed == null) {
             return Map.of();
         }
-        return scenarioStatusesByServiceId(serviceId);
+        return scenarioStatusesByServiceId(parsed);
     }
 
     /** tc_id 별 최근 실행 status. */
-    public Map<String, RunStatus> testCaseStatuses(Path qapilotDir) {
-        UUID serviceId = serviceIdFromQapilotDir(qapilotDir);
-        if (serviceId == null) {
+    public Map<String, RunStatus> testCaseStatuses(String serviceId) {
+        UUID parsed = parseServiceId(serviceId);
+        if (parsed == null) {
             return Map.of();
         }
-        return testCaseStatusesByServiceId(serviceId);
+        return testCaseStatusesByServiceId(parsed);
     }
 
     /**
@@ -125,20 +117,12 @@ public class ScenarioStatusAggregator {
         return result;
     }
 
-    /**
-     * qapilotDir (e.g. /...../system-under-test/.qapilot/test) 의 마지막 segment 가 service slug.
-     * 그 slug → service UUID 변환. PR-15 컷오버 진행 중이라 qapilotDir 시그니처는 유지.
-     */
-    private UUID serviceIdFromQapilotDir(Path qapilotDir) {
-        if (qapilotDir == null || qapilotDir.getFileName() == null) {
+    private UUID parseServiceId(String serviceId) {
+        try {
+            return UUID.fromString(serviceId);
+        } catch (Exception e) {
             return null;
         }
-        String slug = qapilotDir.getFileName().toString();
-        return serviceJpaRepository.findAll().stream()
-                .filter(s -> slug.equals(s.getSlug()))
-                .map(s -> s.getId())
-                .findFirst()
-                .orElse(null);
     }
 
     private static String toLegacyStatus(String dbStatus) {

@@ -11,7 +11,6 @@ import java.util.List;
  */
 public record CodeGenerationRequest(
         @JsonProperty("service_id") String serviceId,
-        @JsonProperty("qapilot_dir") String qapilotDir,
         @JsonProperty("scenario_ids") List<String> scenarioIds
 ) {
 }

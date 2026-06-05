@@ -35,21 +35,19 @@ public class FastApiAgentClient {
 
     public String startTestRun(
             String serviceId,
-            String qapilotDir,
             List<String> scenarioIds,
             String filter,
             List<String> tags,
             String stagingUrl,
             String resumeFromTrace
     ) {
-        AgentRunRequest request = new AgentRunRequest(serviceId, qapilotDir, scenarioIds, filter, tags, stagingUrl, resumeFromTrace);
+        AgentRunRequest request = new AgentRunRequest(serviceId, scenarioIds, filter, tags, stagingUrl, resumeFromTrace);
         Map<String, Object> response = post("/api/agent/test-run", request);
         return extractTraceId(response);
     }
 
     public String startScenarioGeneration(
             String serviceId,
-            String qapilotDir,
             String trigger,
             String userInput,
             List<String> scenarioIds,
@@ -58,31 +56,25 @@ public class FastApiAgentClient {
             List<RepoConfig> repos
     ) {
         ScenarioGenerationRequest request = new ScenarioGenerationRequest(
-                serviceId, qapilotDir, trigger, userInput, scenarioIds, filter, tags, repos
+                serviceId, trigger, userInput, scenarioIds, filter, tags, repos
         );
         return extractTraceId(post("/api/agent/scenario-generation", request));
     }
 
-    public String startCodeChangeDetection(
-            String serviceId,
-            String qapilotDir,
-            List<RepoConfig> repos
-    ) {
-        CodeChangeDetectionRequest request = new CodeChangeDetectionRequest(serviceId, qapilotDir, repos);
+    public String startCodeChangeDetection(String serviceId, List<RepoConfig> repos) {
+        CodeChangeDetectionRequest request = new CodeChangeDetectionRequest(serviceId, repos);
         return extractTraceId(post("/api/agent/code-change-detection", request));
     }
 
-    public String startCodeGeneration(String serviceId, String qapilotDir, List<String> scenarioIds) {
-        CodeGenerationRequest request = new CodeGenerationRequest(serviceId, qapilotDir, scenarioIds);
+    public String startCodeGeneration(String serviceId, List<String> scenarioIds) {
+        CodeGenerationRequest request = new CodeGenerationRequest(serviceId, scenarioIds);
         return extractTraceId(post("/api/agent/code-generation", request));
     }
 
-    public Map<String, Object> trace(String traceId, String qapilotDir) {
+    public Map<String, Object> trace(String traceId) {
         try {
             return webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/agent/traces/{traceId}")
-                            .queryParam("qapilot_dir", qapilotDir)
-                            .build(traceId))
+                    .uri("/api/agent/traces/{traceId}", traceId)
                     .headers(this::internalHeaders)
                     .retrieve()
                     .bodyToMono(mapType())
@@ -92,13 +84,10 @@ public class FastApiAgentClient {
         }
     }
 
-    /** Layer 2 진행 상황 (디스크 results 디렉토리 스캔 결과). */
-    public Map<String, Object> runProgress(String traceId, String qapilotDir) {
+    public Map<String, Object> runProgress(String traceId) {
         try {
             return webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/agent/runs/{traceId}/progress")
-                            .queryParam("qapilot_dir", qapilotDir)
-                            .build(traceId))
+                    .uri("/api/agent/runs/{traceId}/progress", traceId)
                     .headers(this::internalHeaders)
                     .retrieve()
                     .bodyToMono(mapType())
@@ -108,13 +97,10 @@ public class FastApiAgentClient {
         }
     }
 
-    /** 중단된 trace 를 같은 trace_id 로 재개 — 새 trace 만들지 않음. */
-    public Map<String, Object> resumeRun(String traceId, String qapilotDir) {
+    public Map<String, Object> resumeRun(String traceId) {
         try {
             return webClient.post()
-                    .uri(uriBuilder -> uriBuilder.path("/api/agent/runs/{traceId}/resume")
-                            .queryParam("qapilot_dir", qapilotDir)
-                            .build(traceId))
+                    .uri("/api/agent/runs/{traceId}/resume", traceId)
                     .headers(this::internalHeaders)
                     .retrieve()
                     .bodyToMono(mapType())
@@ -124,13 +110,10 @@ public class FastApiAgentClient {
         }
     }
 
-    /** 진행 중인 파이프라인 즉시 중단 — trace.status → "aborted". */
-    public Map<String, Object> stopRun(String traceId, String qapilotDir) {
+    public Map<String, Object> stopRun(String traceId) {
         try {
             return webClient.post()
-                    .uri(uriBuilder -> uriBuilder.path("/api/agent/runs/{traceId}/stop")
-                            .queryParam("qapilot_dir", qapilotDir)
-                            .build(traceId))
+                    .uri("/api/agent/runs/{traceId}/stop", traceId)
                     .headers(this::internalHeaders)
                     .retrieve()
                     .bodyToMono(mapType())
@@ -140,13 +123,10 @@ public class FastApiAgentClient {
         }
     }
 
-    /** 가장 최근 캡쳐된 PNG 스크린샷 raw bytes. 결과 없으면 null. */
-    public byte[] latestScreenshot(String traceId, String qapilotDir) {
+    public byte[] latestScreenshot(String traceId) {
         try {
             return webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/agent/runs/{traceId}/screenshot/latest")
-                            .queryParam("qapilot_dir", qapilotDir)
-                            .build(traceId))
+                    .uri("/api/agent/runs/{traceId}/screenshot/latest", traceId)
                     .headers(this::internalHeaders)
                     .exchangeToMono(resp -> {
                         if (resp.statusCode().value() == 204) {

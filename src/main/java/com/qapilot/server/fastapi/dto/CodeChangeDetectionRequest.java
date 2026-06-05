@@ -17,7 +17,6 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record CodeChangeDetectionRequest(
         @JsonProperty("service_id") String serviceId,
-        @JsonProperty("qapilot_dir") String qapilotDir,
         List<RepoConfig> repos
 ) {
 }

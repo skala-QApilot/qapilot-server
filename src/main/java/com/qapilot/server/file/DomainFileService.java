@@ -6,20 +6,15 @@ import com.qapilot.server.file.domain.DomainFileMeta;
 import com.qapilot.server.file.dto.FileUpdateRequest;
 import com.qapilot.server.file.persistence.DomainDocumentEntity;
 import com.qapilot.server.file.persistence.DomainDocumentRepository;
-import com.qapilot.server.service.persistence.ServiceJpaRepository;
 import com.qapilot.server.storage.S3Service;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 도메인 파일 유스케이스. S3 + DB primary, 디스크는 mirror (FastAPI _doc_import 호환용).
+ * 도메인 파일 유스케이스. S3 + DB 가 진실의 원천이다.
  *
  * <p>Author: C
  * <br>Created: 2026-05-18, dual-write 적용 2026-06-02
@@ -27,19 +22,14 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class DomainFileService {
 
-    private static final Logger log = LoggerFactory.getLogger(DomainFileService.class);
-
     private final DomainDocumentRepository documentRepository;
-    private final ServiceJpaRepository serviceRepository;
     private final S3Service s3Service;
 
     public DomainFileService(
             DomainDocumentRepository documentRepository,
-            ServiceJpaRepository serviceRepository,
             S3Service s3Service
     ) {
         this.documentRepository = documentRepository;
-        this.serviceRepository = serviceRepository;
         this.s3Service = s3Service;
     }
 
@@ -65,7 +55,6 @@ public class DomainFileService {
             throw new QapilotException(ErrorCode.FILE_001, "S3 업로드 실패");
         }
         DomainDocumentEntity entity = save(svc, fileId, filename, 1, s3Key, file);
-        mirrorToDisk(svc, filename, payload);
         return toMeta(entity);
     }
 
@@ -80,7 +69,6 @@ public class DomainFileService {
         String s3Key = buildKey(svc, fid, nextVersion, filename);
         s3Service.put(s3Key, payload, contentType(file));
         DomainDocumentEntity entity = save(svc, fid, filename, nextVersion, s3Key, file);
-        mirrorToDisk(svc, filename, payload);
         return toMeta(entity);
     }
 
@@ -150,27 +138,6 @@ public class DomainFileService {
 
     private String buildKey(UUID serviceId, UUID fileId, int version, String filename) {
         return String.format("services/%s/domain/%s/v%d/%s", serviceId, fileId, version, filename);
-    }
-
-    /**
-     * S3+DB 가 진실의 원천이지만, FastAPI _doc_import 가 service.qapilot_dir/domain/ 을 스캔하므로
-     * 같은 파일을 디스크에도 mirror. 디스크 실패는 silent — S3+DB 성공이 이미 보장됨.
-     */
-    private void mirrorToDisk(UUID serviceId, String filename, byte[] payload) {
-        serviceRepository.findById(serviceId).ifPresent(svc -> {
-            String qapilotDir = svc.getQapilotDir();
-            if (qapilotDir == null || qapilotDir.isBlank()) {
-                return;
-            }
-            try {
-                Path target = Path.of(qapilotDir, "domain", filename);
-                Files.createDirectories(target.getParent());
-                Files.write(target, payload);
-            } catch (Exception e) {
-                log.warn("domain_file_disk_mirror_failed serviceId={} filename={} error={}",
-                        serviceId, filename, e.getMessage());
-            }
-        });
     }
 
     private String requireFilename(MultipartFile file) {
