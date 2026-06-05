@@ -25,9 +25,12 @@ import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 서비스 도메인 유스케이스.
@@ -187,8 +190,10 @@ public class ServiceDomainService {
                 .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
     }
 
+    @Transactional
     public QapilotService update(String serviceId, ServiceUpdateRequest request) {
-        ServiceEntity entity = serviceJpaRepository.findById(UUID.fromString(serviceId))
+        UUID id = UUID.fromString(serviceId);
+        ServiceEntity entity = serviceJpaRepository.findById(id)
                 .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
         if (request.name() != null && !request.name().isBlank()) {
             entity.setDisplayName(request.name().trim());
@@ -196,8 +201,54 @@ public class ServiceDomainService {
         if (request.description() != null) {
             entity.setDescription(request.description());
         }
+        if (request.stagingUrl() != null) {
+            entity.setStagingUrl(nullIfBlank(request.stagingUrl()));
+        }
         serviceJpaRepository.save(entity);
+
+        if (request.repos() != null) {
+            replaceRepos(id, request.repos());
+        }
         return serviceEntityMapper.toDomain(entity);
+    }
+
+    /**
+     * service_repos 를 incoming 으로 교체한다. token 이 blank 인 repo 는 동일 repo_url 의
+     * 기존 token 을 보존한다 — 설정 UI 는 PAT 를 token_set 으로만 받아 재전송하지 않으므로,
+     * blank = "변경 없음" 으로 해석한다.
+     */
+    private void replaceRepos(UUID serviceId, List<RepoConfig> incoming) {
+        List<ServiceRepoEntity> existing =
+                serviceRepoJpaRepository.findAllByServiceIdOrderByPositionAsc(serviceId);
+        Map<String, String> tokenByUrl = new HashMap<>();
+        for (ServiceRepoEntity e : existing) {
+            if (e.getToken() != null) {
+                tokenByUrl.put(e.getRepoUrl(), e.getToken());
+            }
+        }
+        serviceRepoJpaRepository.deleteAll(existing);
+        serviceRepoJpaRepository.flush();
+
+        List<RepoConfig> normalized = normalizeRepos(incoming);
+        if (normalized == null) {
+            return;
+        }
+        int position = 0;
+        for (RepoConfig repo : normalized) {
+            String token = repo.token();
+            if (token == null) {                       // blank → 기존 PAT 보존
+                token = tokenByUrl.get(repo.repoUrl());
+            }
+            ServiceRepoEntity repoEntity = new ServiceRepoEntity();
+            repoEntity.setId(UUID.randomUUID());
+            repoEntity.setServiceId(serviceId);
+            repoEntity.setRepoUrl(repo.repoUrl());
+            repoEntity.setBranch(repo.branch());
+            repoEntity.setRole(repo.role());
+            repoEntity.setToken(token);
+            repoEntity.setPosition(position++);
+            serviceRepoJpaRepository.save(repoEntity);
+        }
     }
 
     public QapilotService setup(String serviceId, ServiceSetupRequest request) {
@@ -206,7 +257,7 @@ public class ServiceDomainService {
         if (request.description() == null) {
             return service;
         }
-        return update(serviceId, new ServiceUpdateRequest(service.displayName(), request.description()));
+        return update(serviceId, new ServiceUpdateRequest(service.displayName(), request.description(), null, null));
     }
 
     public CredentialsResponse credentials(String serviceId) {
