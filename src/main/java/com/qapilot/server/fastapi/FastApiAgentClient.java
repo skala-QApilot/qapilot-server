@@ -72,9 +72,19 @@ public class FastApiAgentClient {
         return extractTraceId(post("/api/agent/code-change-detection", request));
     }
 
-    public String startCodeGeneration(String serviceId, String qapilotDir, List<String> scenarioIds) {
-        CodeGenerationRequest request = new CodeGenerationRequest(serviceId, qapilotDir, scenarioIds);
+    public String startCodeGeneration(
+            String serviceId,
+            String qapilotDir,
+            List<String> scenarioIds,
+            List<String> deletedTcIds,
+            Boolean incremental
+    ) {
+        CodeGenerationRequest request = new CodeGenerationRequest(serviceId, qapilotDir, scenarioIds, deletedTcIds, incremental);
         return extractTraceId(post("/api/agent/code-generation", request));
+    }
+
+    public String startCodeGeneration(String serviceId, String qapilotDir, List<String> scenarioIds) {
+        return startCodeGeneration(serviceId, qapilotDir, scenarioIds, null, null);
     }
 
     public Map<String, Object> trace(String traceId, String qapilotDir) {

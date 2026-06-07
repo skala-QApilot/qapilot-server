@@ -96,6 +96,14 @@ public class ScenarioVersionService {
      * @return 복원된 시나리오 개수
      */
     public int restore(String serviceId, String versionId) {
+        return restoreWithMeta(serviceId, versionId).get("restoredCount") instanceof Integer n ? n : 0;
+    }
+
+    /**
+     * 버전 복원 + 스냅샷 생성 시각 반환.
+     * snapshotCreatedAt 을 이용해 FastAPI 가 해당 시점의 generated_code 를 복원한다.
+     */
+    public Map<String, Object> restoreWithMeta(String serviceId, String versionId) {
         ScenarioVersionEntity entity = requireEntity(serviceId, versionId);
         List<Map<String, Object>> scenarios = fromJson(entity.getScenariosPayload());
         int restored = 0;
@@ -105,7 +113,8 @@ public class ScenarioVersionService {
             scenarioWriter.upsertVersion(serviceId, String.valueOf(tsIdObj), ts);
             restored += 1;
         }
-        return restored;
+        String snapshotCreatedAt = entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString();
+        return Map.of("restoredCount", restored, "snapshotCreatedAt", snapshotCreatedAt == null ? "" : snapshotCreatedAt);
     }
 
     public Map<String, Object> diff(String serviceId, String versionId) {

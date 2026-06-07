@@ -10,6 +10,8 @@ import java.util.List;
  * <br>Created: 2026-05-19
  */
 public record CodeGenerationStartRequest(
-        @JsonProperty("scenario_ids") List<String> scenarioIds
+        @JsonProperty("scenario_ids") List<String> scenarioIds,
+        @JsonProperty("deleted_tc_ids") List<String> deletedTcIds,
+        @JsonProperty("incremental") Boolean incremental
 ) {
 }

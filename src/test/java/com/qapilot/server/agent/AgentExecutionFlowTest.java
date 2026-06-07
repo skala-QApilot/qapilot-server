@@ -131,9 +131,9 @@ class AgentExecutionFlowTest {
         String serviceId = service.get("service_id").asText();
         String qapilotDir = service.get("qapilot_dir").asText();
 
-        when(fastApiAgentClient.startCodeGeneration(serviceId, qapilotDir, null))
+        when(fastApiAgentClient.startCodeGeneration(serviceId, qapilotDir, null, null, null))
                 .thenReturn("TRACE-CODEGEN-ALL");
-        when(fastApiAgentClient.startCodeGeneration(serviceId, qapilotDir, List.of("TS-001")))
+        when(fastApiAgentClient.startCodeGeneration(serviceId, qapilotDir, List.of("TS-001"), List.of("TS-002-TC-01"), true))
                 .thenReturn("TRACE-CODEGEN-TS001");
 
         mockMvc.perform(post("/api/services/" + serviceId + "/code-generation")
@@ -145,7 +145,7 @@ class AgentExecutionFlowTest {
         mockMvc.perform(post("/api/services/" + serviceId + "/code-generation")
                         .header("Authorization", bearer(accessToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"scenario_ids\":[\"TS-001\"]}"))
+                        .content("{\"scenario_ids\":[\"TS-001\"],\"deleted_tc_ids\":[\"TS-002-TC-01\"],\"incremental\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.agent.trace_id").value("TRACE-CODEGEN-TS001"));
     }

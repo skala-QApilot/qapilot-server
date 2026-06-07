@@ -67,4 +67,38 @@ public class ScenarioWriter {
                 .setParameter("ts", tsId)
                 .executeUpdate();
     }
+
+    /**
+     * AI 수정 거절 시 호출 — V15 스키마 기준.
+     *
+     * <p>scenarios 테이블은 (service_id, ts_id, version_number) 로 이력을 관리한다.
+     * 버전이 1개면 is_deleted=true 로 마킹(신규 생성 취소),
+     * 2개 이상이면 최신 버전만 is_deleted=true 로 마킹해 직전 버전으로 롤백.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void rollbackOrDelete(String serviceId, String tsId) {
+        Object maxVerObj = em.createNativeQuery(
+                "SELECT MAX(version_number) FROM scenarios " +
+                "WHERE service_id = CAST(:svc AS uuid) AND ts_id = :ts AND is_deleted = false"
+        )
+                .setParameter("svc", serviceId)
+                .setParameter("ts", tsId)
+                .getSingleResult();
+
+        if (maxVerObj == null) {
+            return;
+        }
+
+        int maxVersion = ((Number) maxVerObj).intValue();
+
+        // 최신 버전 is_deleted = true — 버전 1개면 논리 삭제(취소), 2개 이상이면 롤백 효과
+        em.createNativeQuery(
+                "UPDATE scenarios SET is_deleted = true " +
+                "WHERE service_id = CAST(:svc AS uuid) AND ts_id = :ts AND version_number = :vn"
+        )
+                .setParameter("svc", serviceId)
+                .setParameter("ts", tsId)
+                .setParameter("vn", maxVersion)
+                .executeUpdate();
+    }
 }
