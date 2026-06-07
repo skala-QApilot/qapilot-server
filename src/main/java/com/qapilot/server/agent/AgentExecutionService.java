@@ -8,6 +8,9 @@ import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.fastapi.FastApiAgentClient;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.QapilotService;
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -18,6 +21,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class AgentExecutionService {
+
+    private static final Logger log = LoggerFactory.getLogger(AgentExecutionService.class);
 
     private final ServiceDomainService serviceDomainService;
     private final FastApiAgentClient fastApiAgentClient;
@@ -54,11 +59,35 @@ public class AgentExecutionService {
     }
 
     public AgentStartResponse startCodeGeneration(String serviceId, CodeGenerationStartRequest request) {
+        return startCodeGeneration(
+                serviceId,
+                request == null ? null : request.scenarioIds(),
+                request == null ? null : request.deletedTcIds(),
+                request == null ? null : request.incremental()
+        );
+    }
+
+    public AgentStartResponse startCodeGeneration(
+            String serviceId,
+            List<String> scenarioIds,
+            List<String> deletedTcIds,
+            Boolean incremental
+    ) {
         QapilotService service = serviceDomainService.getById(serviceId);
+        log.info(
+                "start_code_generation serviceId={} qapilotDir={} scenarioIds={} deletedTcIds={} incremental={}",
+                service.serviceId(),
+                service.qapilotDir(),
+                scenarioIds,
+                deletedTcIds,
+                incremental
+        );
         String traceId = fastApiAgentClient.startCodeGeneration(
                 service.serviceId(),
                 service.qapilotDir(),
-                request == null ? null : request.scenarioIds()
+                scenarioIds,
+                deletedTcIds,
+                incremental
         );
         return AgentStartResponse.running(traceId);
     }

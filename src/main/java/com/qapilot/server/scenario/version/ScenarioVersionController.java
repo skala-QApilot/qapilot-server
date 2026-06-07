@@ -77,7 +77,7 @@ public class ScenarioVersionController {
             @PathVariable String serviceId,
             @PathVariable String versionId
     ) {
-        int restored = versionService.restore(serviceId, versionId);
-        return ApiResponse.ok(Map.of("restoredCount", restored));
+        var result = versionService.restoreWithMeta(serviceId, versionId);
+        return ApiResponse.ok(result);
     }
 }

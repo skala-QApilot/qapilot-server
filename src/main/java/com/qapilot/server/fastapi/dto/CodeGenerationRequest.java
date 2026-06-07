@@ -12,6 +12,8 @@ import java.util.List;
 public record CodeGenerationRequest(
         @JsonProperty("service_id") String serviceId,
         @JsonProperty("qapilot_dir") String qapilotDir,
-        @JsonProperty("scenario_ids") List<String> scenarioIds
+        @JsonProperty("scenario_ids") List<String> scenarioIds,
+        @JsonProperty("deleted_tc_ids") List<String> deletedTcIds,
+        @JsonProperty("incremental") Boolean incremental
 ) {
 }
