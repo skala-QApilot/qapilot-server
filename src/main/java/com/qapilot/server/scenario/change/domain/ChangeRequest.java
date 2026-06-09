@@ -18,6 +18,8 @@ public record ChangeRequest(
         String createdAt,
         String updatedAt,
         String reviewedAt,
-        String reviewer
+        String reviewer,
+        String targetId,
+        String content
 ) {
 }

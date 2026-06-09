@@ -77,6 +77,9 @@ public class ScenarioVersionService {
         if (request.label() != null) {
             entity.setLabel(request.label());
         }
+        if (request.description() != null) {
+            entity.setDescription(request.description());
+        }
         if (request.isFavorite() != null) {
             entity.setFavorite(request.isFavorite());
         }
