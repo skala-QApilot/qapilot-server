@@ -20,6 +20,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.http.ResponseEntity;
+
+
 /**
  * 서비스 도메인 API 컨트롤러.
  *
@@ -80,5 +84,11 @@ public class ServiceController {
     @PostMapping("/{serviceId}/credentials/token")
     public ApiResponse<Map<String, CredentialsResponse>> rotateToken(@PathVariable String serviceId) {
         return ApiResponse.ok(Map.of("credentials", CredentialsResponse.from(serviceDomainService.rotateToken(serviceId))));
+    }
+
+    @DeleteMapping("/{serviceId}")
+    public ResponseEntity<Void> delete(@PathVariable String serviceId) {
+        serviceDomainService.delete(serviceId);
+        return ResponseEntity.noContent().build();
     }
 }

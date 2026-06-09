@@ -273,6 +273,20 @@ public class ServiceDomainService {
         serviceJpaRepository.save(entity);
         return serviceEntityMapper.toDomain(entity);
     }
+    
+    @Transactional
+    public void delete(String serviceId) {
+        UUID id;
+        try {
+            id = UUID.fromString(serviceId);
+        } catch (IllegalArgumentException e) {
+            throw new QapilotException(ErrorCode.SERVICE_001);
+        }
+        ServiceEntity entity = serviceJpaRepository.findById(id)
+                .orElseThrow(() -> new QapilotException(ErrorCode.SERVICE_001));
+        serviceRepoJpaRepository.deleteAllByServiceId(id);
+        serviceJpaRepository.delete(entity);
+    }
 
     public ProjectDashboardResponse projectDashboard(String projectSlug) {
         QapilotService service = getByProjectSlug(projectSlug);
