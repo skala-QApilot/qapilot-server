@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 public record UpdateScenarioVersionRequest(
         @JsonProperty("isFavorite") Boolean isFavorite,
-        String label
+        String label,
+        String description
 ) {
 }

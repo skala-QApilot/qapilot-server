@@ -5,6 +5,8 @@ import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -39,7 +41,7 @@ public class ScenarioWriter {
         String payloadJson;
         try {
             payloadJson = objectMapper.writeValueAsString(payload);
-        } catch (Exception e) {
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new QapilotException(ErrorCode.FILE_001, "시나리오 직렬화 실패");
         }
 
@@ -66,6 +68,51 @@ public class ScenarioWriter {
                 .setParameter("svc", serviceId)
                 .setParameter("ts", tsId)
                 .executeUpdate();
+    }
+
+    /**
+     * TC 삭제 승인 시 호출 — _pending_delete=true 인 TC를 payload에서 제거해 새 버전으로 저장한다.
+     *
+     * <p>최신 payload를 조회해 test_cases 중 _pending_delete=true 항목을 제거한 뒤
+     * upsertVersion으로 새 버전을 INSERT한다.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    @SuppressWarnings("unchecked")
+    public void removePendingDeleteTestCases(String serviceId, String tsId) {
+        // getSingleResult() 대신 getResultList() — 결과 없을 때 NoResultException 방지
+        // Object.toString() — jsonb 컬럼이 PGobject로 반환될 때도 문자열 추출 가능
+        List<Object> rows = em.createNativeQuery(
+                "SELECT CAST(payload AS TEXT) FROM scenarios " +
+                "WHERE service_id = CAST(:svc AS uuid) AND ts_id = :ts AND is_deleted = false " +
+                "ORDER BY version_number DESC LIMIT 1"
+        )
+                .setParameter("svc", serviceId)
+                .setParameter("ts", tsId)
+                .getResultList();
+
+        if (rows.isEmpty() || rows.get(0) == null) return;
+        String payloadJson = rows.get(0).toString();
+
+        Map<String, Object> payload;
+        try {
+            payload = objectMapper.readValue(payloadJson, Map.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new QapilotException(ErrorCode.FILE_001, "시나리오 역직렬화 실패");
+        }
+
+        Object rawTcs = payload.get("test_cases");
+        if (rawTcs instanceof List<?> tcList) {
+            List<Object> filtered = new ArrayList<>();
+            for (Object item : tcList) {
+                if (item instanceof Map<?, ?> tc && Boolean.TRUE.equals(tc.get("_pending_delete"))) {
+                    continue;
+                }
+                filtered.add(item);
+            }
+            payload.put("test_cases", filtered);
+        }
+
+        upsertVersion(serviceId, tsId, payload);
     }
 
     /**

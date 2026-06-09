@@ -6,6 +6,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -20,6 +23,7 @@ import lombok.Setter;
  */
 @Entity
 @Table(name = "change_requests")
+@DynamicUpdate
 @Getter
 @Setter
 @NoArgsConstructor
@@ -36,6 +40,13 @@ public class ChangeRequestEntity {
 
     @Column(columnDefinition = "text")
     private String reason;
+
+    @Column(name = "target_id")
+    private String targetId;
+
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "content", columnDefinition = "jsonb")
+    private String content;
 
     private String trigger;
 

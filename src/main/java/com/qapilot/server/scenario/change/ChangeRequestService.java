@@ -61,8 +61,31 @@ public class ChangeRequestService {
         // 상태 저장을 rollbackOrDelete보다 먼저 커밋 — 롤백 실패가 상태 저장을 방해하지 않도록
         changeRequestRepository.saveAndFlush(entity);
 
-        // 거절 시: 별도 처리 — 실패해도 change_request 상태는 이미 저장됨
-        if ("rejected".equals(request.status()) && entity.getScenarioId() != null) {
+        boolean isOrphaned = "orphaned".equals(entity.getTrigger());
+        boolean isDeleteRequest = isDeleteTsRequest(entity.getContent());
+        boolean isDeleteTcRequest = isDeleteTcIdsRequest(entity.getContent());
+
+        // 승인 + (orphaned 또는 delete_ts=true): 삭제 요청 확정 → TS soft delete
+        if ("approved".equals(request.status()) && (isOrphaned || isDeleteRequest) && entity.getScenarioId() != null) {
+            try {
+                scenarioWriter.delete(serviceId, entity.getScenarioId());
+            } catch (Exception e) {
+                // 삭제 실패는 로그만 남기고 진행 — 사용자가 수동으로 삭제 가능
+            }
+        }
+
+        // 승인 + deleted_tc_ids: _pending_delete TC를 payload에서 실제 제거
+        if ("approved".equals(request.status()) && isDeleteTcRequest && entity.getScenarioId() != null) {
+            try {
+                scenarioWriter.removePendingDeleteTestCases(serviceId, entity.getScenarioId());
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(ChangeRequestService.class)
+                        .error("tc_delete_approval_failed scenarioId={} error={}", entity.getScenarioId(), e.getMessage(), e);
+            }
+        }
+
+        // 거절 + 삭제 요청이 아닌 경우: AI 수정 롤백 — 실패해도 change_request 상태는 이미 저장됨
+        if ("rejected".equals(request.status()) && !isOrphaned && !isDeleteRequest && entity.getScenarioId() != null) {
             try {
                 scenarioWriter.rollbackOrDelete(serviceId, entity.getScenarioId());
             } catch (Exception e) {
@@ -81,6 +104,31 @@ public class ChangeRequestService {
                 .collect(java.util.stream.Collectors.toSet());
     }
 
+    /** content JSON에 deleted_tc_ids 배열이 있으면 TC 삭제 요청으로 판단한다. */
+    private boolean isDeleteTcIdsRequest(String content) {
+        if (content == null || content.isBlank()) return false;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(content);
+            com.fasterxml.jackson.databind.JsonNode tcIds = node.path("deleted_tc_ids");
+            return tcIds.isArray() && !tcIds.isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** content JSON에 delete_ts: true 가 있으면 사용자 삭제 요청으로 판단한다. */
+    private boolean isDeleteTsRequest(String content) {
+        if (content == null || content.isBlank()) return false;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(content);
+            return node.path("delete_ts").asBoolean(false);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private ChangeRequest toDomain(ChangeRequestEntity e) {
         return new ChangeRequest(
                 e.getId().toString(),
@@ -91,7 +139,9 @@ public class ChangeRequestService {
                 e.getCreatedAt() == null ? null : e.getCreatedAt().toString(),
                 e.getUpdatedAt() == null ? null : e.getUpdatedAt().toString(),
                 e.getReviewedAt() == null ? null : e.getReviewedAt().toString(),
-                e.getReviewer()
+                e.getReviewer(),
+                e.getTargetId(),
+                e.getContent()
         );
     }
 }
