@@ -43,7 +43,8 @@ public class AgentExecutionService {
                 request.scenarioIds(),
                 request.filter(),
                 request.tags(),
-                service.repos()
+                service.repos(),
+                service.targetRoot()
         );
         return AgentStartResponse.running(traceId);
     }

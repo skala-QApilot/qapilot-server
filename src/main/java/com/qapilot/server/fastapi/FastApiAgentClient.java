@@ -55,10 +55,11 @@ public class FastApiAgentClient {
             List<String> scenarioIds,
             String filter,
             List<String> tags,
-            List<RepoConfig> repos
+            List<RepoConfig> repos,
+            String targetRoot
     ) {
         ScenarioGenerationRequest request = new ScenarioGenerationRequest(
-                serviceId, qapilotDir, trigger, userInput, scenarioIds, filter, tags, repos
+                serviceId, qapilotDir, trigger, userInput, scenarioIds, filter, tags, repos, targetRoot
         );
         return extractTraceId(post("/api/agent/scenario-generation", request));
     }
