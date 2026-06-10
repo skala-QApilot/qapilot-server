@@ -7,6 +7,8 @@ import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.result.dto.ResultResponse;
 import com.qapilot.server.result.dto.ResultStatisticsResponse;
 import com.qapilot.server.run.RunReader;
+import com.qapilot.server.run.persistence.ActionMappingEntity;
+import com.qapilot.server.run.persistence.ActionMappingRepository;
 import com.qapilot.server.run.persistence.TcArtifactEntity;
 import com.qapilot.server.run.persistence.TcArtifactRepository;
 import com.qapilot.server.run.persistence.TcResultEntity;
@@ -37,6 +39,7 @@ public class ResultQueryService {
     private final RunReader runReader;
     private final TcResultRepository tcResultRepository;
     private final TcArtifactRepository tcArtifactRepository;
+    private final ActionMappingRepository actionMappingRepository;
     private final S3Service s3Service;
     private final ObjectMapper objectMapper;
 
@@ -45,6 +48,7 @@ public class ResultQueryService {
             RunReader runReader,
             TcResultRepository tcResultRepository,
             TcArtifactRepository tcArtifactRepository,
+            ActionMappingRepository actionMappingRepository,
             S3Service s3Service,
             ObjectMapper objectMapper
     ) {
@@ -52,17 +56,34 @@ public class ResultQueryService {
         this.runReader = runReader;
         this.tcResultRepository = tcResultRepository;
         this.tcArtifactRepository = tcArtifactRepository;
+        this.actionMappingRepository = actionMappingRepository;
         this.s3Service = s3Service;
         this.objectMapper = objectMapper;
     }
 
-    /** ui_result 본문 — tc_results.payload (JSONB) decode 해서 Map 으로 반환. */
-    public Map<String, Object> getUiResult(String serviceId, String runId, String tsId, String tcId) {
+    /**
+     * TC 결과 본문 — tc_results.payload (JSONB) decode 해서 Map 으로 반환.
+     * kind = ui / api / db. 해당 결과가 없으면 빈 Map (호출자 graceful).
+     */
+    public Map<String, Object> getTcPayload(String serviceId, String runId, String tsId, String tcId, String kind) {
         serviceDomainService.getById(serviceId);  // 권한 검증
-        TcResultEntity entity = tcResultRepository
-                .findFirstByRunIdAndTsIdAndTcIdAndKind(UUID.fromString(runId), tsId, tcId, "ui")
-                .orElseThrow(() -> new QapilotException(ErrorCode.RESULT_001));
-        String json = entity.getPayload();
+        return tcResultRepository
+                .findFirstByRunIdAndTsIdAndTcIdAndKind(UUID.fromString(runId), tsId, tcId, kind)
+                .map(e -> decodeJson(e.getPayload()))
+                .orElse(Map.of());
+    }
+
+    /** TC 의 ActionMapping (steps + api_endpoint) — action_mappings 테이블 최신 version. 없으면 빈 Map. */
+    public Map<String, Object> getActionMapping(String serviceId, String tcId) {
+        serviceDomainService.getById(serviceId);  // 권한 검증
+        return actionMappingRepository
+                .findFirstByServiceIdAndTcIdOrderByVersionDesc(UUID.fromString(serviceId), tcId)
+                .map(ActionMappingEntity::getPayload)
+                .map(this::decodeJson)
+                .orElse(Map.of());
+    }
+
+    private Map<String, Object> decodeJson(String json) {
         if (json == null || json.isBlank()) {
             return Map.of();
         }
@@ -71,6 +92,34 @@ public class ResultQueryService {
         } catch (Exception e) {
             return Map.of();
         }
+    }
+
+    /** run 의 모든 TC 결과 목록 (kind/status) — PASS/FAIL 탭 리스트 채우기용. */
+    public List<Map<String, Object>> listTcResults(String serviceId, String runId) {
+        serviceDomainService.getById(serviceId);  // 권한 검증
+        return tcResultRepository.findAllByRunId(UUID.fromString(runId)).stream()
+                .map(e -> {
+                    Map<String, Object> m = new java.util.HashMap<>();
+                    m.put("ts_id", e.getTsId());
+                    m.put("tc_id", e.getTcId());
+                    m.put("kind", e.getKind());
+                    m.put("status", toLegacyStatus(e.getStatus()));
+                    return m;
+                })
+                .toList();
+    }
+
+    /** DB 상태 어휘(pass/fail/skip) → 응답 어휘(passed/failed/skipped). RunReader 와 동일 규칙. */
+    private String toLegacyStatus(String dbStatus) {
+        if (dbStatus == null) {
+            return null;
+        }
+        return switch (dbStatus) {
+            case "pass" -> "passed";
+            case "fail" -> "failed";
+            case "skip" -> "skipped";
+            default -> dbStatus;
+        };
     }
 
     /** 에러 시점 스크린샷 — S3 에서 byte[] 로 가져옴. step 미지정 시 step=1 (fail step). */

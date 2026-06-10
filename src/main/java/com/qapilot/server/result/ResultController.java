@@ -52,16 +52,38 @@ public class ResultController {
         return ApiResponse.ok(Map.of("result", resultQueryService.get(serviceId, traceId)));
     }
 
-    /** TC 한 건의 ui_result.json 본문 — tc_results.payload (JSONB) 반환. */
+    /** TC 한 건의 결과 본문 — tc_results.payload (JSONB). kind=ui/api/db (기본 ui). */
     @GetMapping("/{traceId}/tc-result")
     public ApiResponse<Map<String, Object>> getTcResult(
             @PathVariable String serviceId,
             @PathVariable String traceId,
             @RequestParam(name = "ts_id") String tsId,
+            @RequestParam(name = "tc_id") String tcId,
+            @RequestParam(name = "kind", defaultValue = "ui") String kind
+    ) {
+        Map<String, Object> payload = resultQueryService.getTcPayload(serviceId, traceId, tsId, tcId, kind);
+        return ApiResponse.ok(Map.of("ui_result", payload));
+    }
+
+    /** run 의 TC 결과 목록 (kind/status) — PASS/FAIL 리스트 채우기용. */
+    @GetMapping("/{traceId}/tc-results")
+    public ApiResponse<Map<String, Object>> listTcResults(
+            @PathVariable String serviceId,
+            @PathVariable String traceId
+    ) {
+        List<Map<String, Object>> items = resultQueryService.listTcResults(serviceId, traceId);
+        return ApiResponse.ok(Map.of("tc_results", items));
+    }
+
+    /** TC 의 ActionMapping (steps + api_endpoint) — 어떤 동작이 어떤 API 를 호출하는지. */
+    @GetMapping("/{traceId}/tc-action-mapping")
+    public ApiResponse<Map<String, Object>> getTcActionMapping(
+            @PathVariable String serviceId,
+            @PathVariable String traceId,
             @RequestParam(name = "tc_id") String tcId
     ) {
-        Map<String, Object> ui = resultQueryService.getUiResult(serviceId, traceId, tsId, tcId);
-        return ApiResponse.ok(Map.of("ui_result", ui));
+        Map<String, Object> am = resultQueryService.getActionMapping(serviceId, tcId);
+        return ApiResponse.ok(Map.of("action_mapping", am));
     }
 
     /** TC 의 에러 시점 스크린샷 — S3 에서 byte 로 받아 image/png 응답. step 기본 1. */
