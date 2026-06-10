@@ -23,6 +23,7 @@ public record ScenarioGenerationRequest(
         @JsonProperty("scenario_ids") List<String> scenarioIds,
         String filter,
         List<String> tags,
-        List<RepoConfig> repos
+        List<RepoConfig> repos,
+        @JsonProperty("target_root") String targetRoot
 ) {
 }
