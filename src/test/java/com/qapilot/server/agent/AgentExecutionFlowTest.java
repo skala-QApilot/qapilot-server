@@ -64,7 +64,7 @@ class AgentExecutionFlowTest {
 
         when(fastApiAgentClient.startScenarioGeneration(
                 serviceId, qapilotDir, "natural_lang", "로그인 시나리오 생성", null, null, null,
-                null
+                null, targetRoot.toString()
         )).thenReturn("TRACE-GEN");
         when(fastApiAgentClient.startCodeChangeDetection(
                 serviceId, qapilotDir, null
@@ -95,7 +95,8 @@ class AgentExecutionFlowTest {
 
         when(fastApiAgentClient.startScenarioGeneration(
                 serviceId, qapilotDir, "init", null, null, null, null,
-                List.of(new RepoConfig("https://github.com/owner/repo", "ghp_xxx", "main", "frontend"))
+                List.of(new RepoConfig("https://github.com/owner/repo", "ghp_xxx", "main", "frontend")),
+                targetRoot.toString()
         )).thenReturn("TRACE-GIT");
 
         mockMvc.perform(post("/api/services/" + serviceId + "/scenario-generation")
