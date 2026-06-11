@@ -105,12 +105,18 @@ public class RunReader {
             trace.put("agent_logs", agentLogs);
         }
 
-        // tc_results 별 테이블에서 ui kind 만 추출 → {tc_id: legacy_status}
-        // 파일 trace JSON 호환을 위해 status 어휘 매핑: pass→passed, fail→failed, skip→skipped.
-        // 기존 ResultResponse.fromTrace 등 consumer 가 "passed"/"failed" 로 비교한다.
+        // tc_results — TC 의 진짜 verdict 는 cross_check kind (UI/API/DB 정합 +
+        // 시나리오 의도 판정 포함). run d20fc18f 실증: ui fail 24 중 4건을
+        // cross_check 가 "의도 도달" pass 로 구제 — ui kind 단독 표시는 진실 왜곡.
+        // 우선순위: cross_check 있으면 그것 (pass→passed, fail→failed,
+        // unverified→unverified), 없으면 ui kind fallback (skip→skipped 포함).
         Map<String, String> tcResults = new HashMap<>();
-        tcResultRepository.findAllByRunId(run.getId()).stream()
+        var allResults = tcResultRepository.findAllByRunId(run.getId());
+        allResults.stream()
                 .filter(r -> "ui".equals(r.getKind()) && r.getStatus() != null)
+                .forEach(r -> tcResults.put(r.getTcId(), toLegacyStatus(r.getStatus())));
+        allResults.stream()
+                .filter(r -> "cross_check".equals(r.getKind()) && r.getStatus() != null)
                 .forEach(r -> tcResults.put(r.getTcId(), toLegacyStatus(r.getStatus())));
         if (!tcResults.isEmpty()) {
             trace.put("tc_results", tcResults);
