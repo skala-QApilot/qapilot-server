@@ -165,11 +165,14 @@ public class ResultQueryService {
     }
 
     public ResultStatisticsResponse statistics(String serviceId) {
+        // TC-level 집계 — run 의 "completed" 는 파이프라인 정상 종료일 뿐이라
+        // TC 가 전부 실패한 run 도 pass 로 잡힌다. passed/failed 는 tc_results
+        // 의 TC 단위 합계, pass_rate 는 측정된 TC (passed+failed) 기준.
         List<ResultResponse> results = allResults(serviceId);
-        int passed = (int) results.stream().filter(result -> "completed".equals(result.status())).count();
-        // "aborted": 파이프라인이 비정상 종료(예외/Ctrl+C 등). TC-level "failed" 와 다른 축.
-        int failed = (int) results.stream().filter(result -> "aborted".equals(result.status())).count();
-        Double passRate = results.isEmpty() ? null : (passed * 100.0) / results.size();
+        int passed = results.stream().mapToInt(ResultResponse::passCount).sum();
+        int failed = results.stream().mapToInt(ResultResponse::failCount).sum();
+        int measured = passed + failed;
+        Double passRate = measured == 0 ? null : (passed * 100.0) / measured;
         return new ResultStatisticsResponse(results.size(), passed, failed, passRate);
     }
 

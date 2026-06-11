@@ -93,10 +93,24 @@ public class RunService {
 
     public Map<String, Object> progress(String serviceId, String runId) {
         Map<String, Object> trace = traceWithPolling(serviceId, runId);
+        // tc_results (TC 단위 passed/failed) 실 집계 — 하드코딩 0 은 실행 내내
+        // 진행률을 0/0 으로 보이게 한다.
+        int pass = 0;
+        int fail = 0;
+        Object raw = trace.get("tc_results");
+        if (raw instanceof Map<?, ?> tcResults) {
+            for (Object status : tcResults.values()) {
+                if ("passed".equals(status)) {
+                    pass++;
+                } else if ("failed".equals(status)) {
+                    fail++;
+                }
+            }
+        }
         return Map.of(
                 "stages", List.of(),
-                "pass", 0,
-                "fail", 0,
+                "pass", pass,
+                "fail", fail,
                 "hitl_pending", 0,
                 "status", trace.getOrDefault("status", "unknown")
         );

@@ -65,6 +65,27 @@ public class DashboardService {
     }
 
     private Double passRate(List<Map<String, Object>> traces) {
-        return null;
+        // test command trace 들의 tc_results (TC 단위 passed/failed) 합산.
+        // 측정된 TC 가 없으면 null (미측정과 0% 를 구분).
+        int passed = 0;
+        int measured = 0;
+        for (Map<String, Object> trace : traces) {
+            if (!"test".equals(trace.get("command"))) {
+                continue;
+            }
+            Object raw = trace.get("tc_results");
+            if (!(raw instanceof Map<?, ?> tcResults)) {
+                continue;
+            }
+            for (Object status : tcResults.values()) {
+                if ("passed".equals(status)) {
+                    passed++;
+                    measured++;
+                } else if ("failed".equals(status)) {
+                    measured++;
+                }
+            }
+        }
+        return measured == 0 ? null : (passed * 100.0) / measured;
     }
 }
