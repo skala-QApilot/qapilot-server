@@ -21,6 +21,7 @@ public record ResultResponse(
         @JsonProperty("result_summary") Map<String, Object> resultSummary,
         @JsonProperty("pass_count") int passCount,
         @JsonProperty("fail_count") int failCount,
+        @JsonProperty("skip_count") int skipCount,
         @JsonProperty("total_tc_count") int totalTcCount
 ) {
     @SuppressWarnings("unchecked")
@@ -31,6 +32,7 @@ public record ResultResponse(
                 : Map.of();
         int passCount = 0;
         int failCount = 0;
+        int skipCount = 0;
         Object tcResults = trace.get("tc_results");
         if (tcResults instanceof Map<?, ?> tcMap) {
             for (Object v : tcMap.values()) {
@@ -38,6 +40,9 @@ public record ResultResponse(
                 String s = v.toString();
                 if ("passed".equals(s)) passCount++;
                 else if ("failed".equals(s)) failCount++;
+                // "skipped" = 실행됐지만 검증 미완 (자동화 불가 step 보유 등) —
+                // 미실행(N) 과 의미가 다르므로 별도 집계 (UI 의 S 표시용)
+                else if ("skipped".equals(s)) skipCount++;
             }
         }
         // total_tc_count = "사용자가 선택한 시나리오들의 전체 TC 수" — pipeline 의 _load_scenarios_for_test
@@ -58,6 +63,7 @@ public record ResultResponse(
                 resultSummary,
                 passCount,
                 failCount,
+                skipCount,
                 totalTcCount
         );
     }
