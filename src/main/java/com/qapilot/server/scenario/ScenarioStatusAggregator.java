@@ -64,19 +64,36 @@ public class ScenarioStatusAggregator {
      */
     @SuppressWarnings("unchecked")
     public Map<String, RunStatus> testCaseStatusesByServiceId(UUID serviceId) {
+        // verdict 일관화: cross_check kind 우선 (UI/API/DB 정합 + 의도 판정),
+        // ui kind 는 fallback. 단 skip 보호 — UI 가 검증을 안 한 TC (skip) 를
+        // cross_check 의 무신호 pass 가 통과로 둔갑시키지 않는다 (RunReader 와 동일 규칙).
         List<Object[]> rows = em.createNativeQuery(
-                "SELECT DISTINCT ON (tc.tc_id) tc.tc_id, tc.status, r.completed_at, r.started_at " +
+                "SELECT DISTINCT ON (tc.tc_id, tc.kind) tc.tc_id, tc.kind, tc.status, r.completed_at, r.started_at " +
                 "FROM tc_results tc JOIN runs r ON r.id = tc.run_id " +
-                "WHERE r.service_id = :svc AND tc.kind = 'ui' AND tc.status IS NOT NULL " +
-                "ORDER BY tc.tc_id, r.completed_at DESC NULLS LAST, r.started_at DESC"
+                "WHERE r.service_id = :svc AND tc.kind IN ('ui','cross_check') AND tc.status IS NOT NULL " +
+                "ORDER BY tc.tc_id, tc.kind, r.completed_at DESC NULLS LAST, r.started_at DESC"
         ).setParameter("svc", serviceId).getResultList();
 
-        Map<String, RunStatus> result = new HashMap<>(rows.size());
+        Map<String, RunStatus> result = new HashMap<>();
+        Map<String, RunStatus> ccByTc = new HashMap<>();
         for (Object[] row : rows) {
             String tcId = (String) row[0];
-            String legacy = toLegacyStatus((String) row[1]);
-            String at = toIso((Instant) (row[2] != null ? row[2] : row[3]));
-            result.put(tcId, new RunStatus(legacy, at));
+            String kind = (String) row[1];
+            String legacy = toLegacyStatus((String) row[2]);
+            String at = toIso((Instant) (row[3] != null ? row[3] : row[4]));
+            if ("ui".equals(kind)) {
+                result.put(tcId, new RunStatus(legacy, at));
+            } else {
+                ccByTc.put(tcId, new RunStatus(legacy, at));
+            }
+        }
+        for (Map.Entry<String, RunStatus> e : ccByTc.entrySet()) {
+            RunStatus ui = result.get(e.getKey());
+            boolean uiSkipped = ui != null && "skipped".equals(ui.status());
+            if (uiSkipped && "passed".equals(e.getValue().status())) {
+                continue; // skip 보호
+            }
+            result.put(e.getKey(), e.getValue());
         }
         return result;
     }
@@ -89,37 +106,27 @@ public class ScenarioStatusAggregator {
     public Map<String, RunStatus> scenarioStatusesByServiceId(UUID serviceId) {
         // 각 ts_id 의 최근 run 의 (status, completed_at) 들을 모은다.
         // ts_id 별로 그 run 의 tc 결과를 aggregate.
-        List<Object[]> rows = em.createNativeQuery(
-                "WITH latest_tc AS (" +
-                "  SELECT DISTINCT ON (tc.ts_id, tc.tc_id) tc.ts_id, tc.tc_id, tc.status, " +
-                "         r.completed_at, r.started_at " +
-                "  FROM tc_results tc JOIN runs r ON r.id = tc.run_id " +
-                "  WHERE r.service_id = :svc AND tc.kind = 'ui' AND tc.status IS NOT NULL " +
-                "  ORDER BY tc.ts_id, tc.tc_id, r.completed_at DESC NULLS LAST, r.started_at DESC" +
-                ") " +
-                "SELECT ts_id, " +
-                "       BOOL_OR(status = 'fail')  AS any_fail, " +
-                "       BOOL_AND(status = 'pass') AS all_pass, " +
-                "       MAX(COALESCE(completed_at, started_at)) AS when_at " +
-                "FROM latest_tc GROUP BY ts_id"
-        ).setParameter("svc", serviceId).getResultList();
+        // TC verdict (cc 우선 + skip 보호) 를 ts 단위로 집계 — 화면 간 판정 일관성.
+        Map<String, RunStatus> tcVerdicts = testCaseStatusesByServiceId(serviceId);
 
-        Map<String, RunStatus> result = new HashMap<>(rows.size());
-        for (Object[] row : rows) {
-            String tsId = (String) row[0];
-            Boolean anyFail = (Boolean) row[1];
-            Boolean allPass = (Boolean) row[2];
-            String at = toIso((Instant) row[3]);
-            String status;
-            if (Boolean.TRUE.equals(anyFail)) {
-                status = "failed";
-            } else if (Boolean.TRUE.equals(allPass)) {
-                status = "passed";
-            } else {
-                status = null;  // skip 만 있거나 mixed — 의도적으로 미정
-            }
+        Map<String, boolean[]> agg = new HashMap<>(); // ts → [anyFail, allPass]
+        Map<String, String> whenAt = new HashMap<>();
+        for (Map.Entry<String, RunStatus> e : tcVerdicts.entrySet()) {
+            String tsId = tsFromTc(e.getKey());
+            if (tsId.isEmpty()) continue;
+            boolean[] a = agg.computeIfAbsent(tsId, k -> new boolean[]{false, true});
+            String st = e.getValue().status();
+            if ("failed".equals(st)) a[0] = true;
+            if (!"passed".equals(st)) a[1] = false;
+            String at = e.getValue().at();
+            String prev = whenAt.get(tsId);
+            if (at != null && (prev == null || at.compareTo(prev) > 0)) whenAt.put(tsId, at);
+        }
+        Map<String, RunStatus> result = new HashMap<>(agg.size());
+        for (Map.Entry<String, boolean[]> e : agg.entrySet()) {
+            String status = e.getValue()[0] ? "failed" : (e.getValue()[1] ? "passed" : null);
             if (status != null) {
-                result.put(tsId, new RunStatus(status, at));
+                result.put(e.getKey(), new RunStatus(status, whenAt.get(e.getKey())));
             }
         }
         return result;
@@ -139,6 +146,11 @@ public class ScenarioStatusAggregator {
                 .map(s -> s.getId())
                 .findFirst()
                 .orElse(null);
+    }
+
+    private static String tsFromTc(String tcId) {
+        int i = tcId == null ? -1 : tcId.indexOf("-TC-");
+        return i > 0 ? tcId.substring(0, i) : "";
     }
 
     private static String toLegacyStatus(String dbStatus) {

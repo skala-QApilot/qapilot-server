@@ -117,7 +117,17 @@ public class RunReader {
                 .forEach(r -> tcResults.put(r.getTcId(), toLegacyStatus(r.getStatus())));
         allResults.stream()
                 .filter(r -> "cross_check".equals(r.getKind()) && r.getStatus() != null)
-                .forEach(r -> tcResults.put(r.getTcId(), toLegacyStatus(r.getStatus())));
+                .forEach(r -> {
+                    String cc = toLegacyStatus(r.getStatus());
+                    String ui = tcResults.get(r.getTcId());
+                    // skip 보호: UI 가 검증을 안 한 TC (skipped) 를 cross_check 의
+                    // 무신호 pass 가 통과로 둔갑시키면 false-positive 부활.
+                    // fail/unverified 신호만 skip 을 덮을 수 있다.
+                    if ("skipped".equals(ui) && "passed".equals(cc)) {
+                        return;
+                    }
+                    tcResults.put(r.getTcId(), cc);
+                });
         if (!tcResults.isEmpty()) {
             trace.put("tc_results", tcResults);
         }
