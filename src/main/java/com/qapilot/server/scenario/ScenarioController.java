@@ -1,8 +1,10 @@
 package com.qapilot.server.scenario;
 
 import com.qapilot.server.common.response.ApiResponse;
+import java.net.URLConnection;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -75,5 +77,31 @@ public class ScenarioController {
     ) {
         List<Map<String, Object>> testCases = scenarioService.testCases(serviceId, scenarioId);
         return ApiResponse.ok(Map.of("test_cases", testCases, "count", testCases.size()));
+    }
+
+    @GetMapping("/test-cases/{tcId}/action-mapping")
+    public ApiResponse<Map<String, Object>> actionMapping(@PathVariable String serviceId, @PathVariable String tcId) {
+        return ApiResponse.ok(Map.of("action_mapping", scenarioService.actionMapping(serviceId, tcId)));
+    }
+
+    @GetMapping("/documents/{filename}")
+    public ResponseEntity<byte[]> document(@PathVariable String serviceId, @PathVariable String filename) {
+        byte[] content = scenarioService.documentContent(serviceId, filename);
+        String contentType = URLConnection.guessContentTypeFromName(filename);
+        MediaType mediaType = contentType != null
+                ? MediaType.parseMediaType(contentType)
+                : MediaType.APPLICATION_OCTET_STREAM;
+        return ResponseEntity.ok().contentType(mediaType).body(content);
+    }
+
+    @GetMapping("/source")
+    public ApiResponse<Map<String, Object>> source(
+            @PathVariable String serviceId,
+            @RequestParam String file,
+            @RequestParam String commitSha,
+            @RequestParam(required = false) Integer lineStart,
+            @RequestParam(required = false) Integer lineEnd
+    ) {
+        return ApiResponse.ok(scenarioService.sourceContent(serviceId, file, commitSha, lineStart, lineEnd));
     }
 }

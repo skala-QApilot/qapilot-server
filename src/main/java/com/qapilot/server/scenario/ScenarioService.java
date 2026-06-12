@@ -2,6 +2,7 @@ package com.qapilot.server.scenario;
 
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
+import com.qapilot.server.fastapi.FastApiAgentClient;
 import com.qapilot.server.service.ServiceDomainService;
 import com.qapilot.server.service.domain.QapilotService;
 import java.nio.file.Path;
@@ -30,19 +31,22 @@ public class ScenarioService {
     private final ScenarioWriter scenarioWriter;
     private final ScenarioStatusAggregator statusAggregator;
     private final ScenarioPendingChangesResolver pendingChangesResolver;
+    private final FastApiAgentClient fastApiAgentClient;
 
     public ScenarioService(
             ServiceDomainService serviceDomainService,
             ScenarioReader scenarioReader,
             ScenarioWriter scenarioWriter,
             ScenarioStatusAggregator statusAggregator,
-            ScenarioPendingChangesResolver pendingChangesResolver
+            ScenarioPendingChangesResolver pendingChangesResolver,
+            FastApiAgentClient fastApiAgentClient
     ) {
         this.serviceDomainService = serviceDomainService;
         this.scenarioReader = scenarioReader;
         this.scenarioWriter = scenarioWriter;
         this.statusAggregator = statusAggregator;
         this.pendingChangesResolver = pendingChangesResolver;
+        this.fastApiAgentClient = fastApiAgentClient;
     }
 
     public List<Map<String, Object>> list(String serviceId, String search, String trigger) {
@@ -96,6 +100,33 @@ public class ScenarioService {
 
     public void delete(String serviceId, String scenarioId) {
         scenarioWriter.delete(serviceId, scenarioId);
+    }
+
+    /** 도메인 문서(PRD 등) 원문. 없으면 SCENARIO_003. */
+    public byte[] documentContent(String serviceId, String filename) {
+        byte[] content = fastApiAgentClient.documentContent(serviceId, filename);
+        if (content == null) {
+            throw new QapilotException(ErrorCode.SCENARIO_003);
+        }
+        return content;
+    }
+
+    /** codebase_ref 의 코드 본문. 없으면 SCENARIO_004. */
+    public Map<String, Object> sourceContent(String serviceId, String file, String commitSha, Integer lineStart, Integer lineEnd) {
+        Map<String, Object> content = fastApiAgentClient.sourceContent(serviceId, file, commitSha, lineStart, lineEnd);
+        if (content == null) {
+            throw new QapilotException(ErrorCode.SCENARIO_004);
+        }
+        return content;
+    }
+
+    /** TC 의 최신 action mapping (실행 스텝 시퀀스). 없으면 SCENARIO_005. */
+    public Map<String, Object> actionMapping(String serviceId, String tcId) {
+        Map<String, Object> mapping = fastApiAgentClient.actionMapping(serviceId, tcId);
+        if (mapping == null) {
+            throw new QapilotException(ErrorCode.SCENARIO_005);
+        }
+        return mapping;
     }
 
     @SuppressWarnings("unchecked")

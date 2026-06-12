@@ -151,6 +151,85 @@ public class FastApiAgentClient {
         }
     }
 
+    /** 도메인 문서(PRD 등) 원문 raw bytes. 없으면 null. */
+    public byte[] documentContent(String serviceId, String filename) {
+        try {
+            return webClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/agent/services/{serviceId}/documents/{filename}")
+                            .build(serviceId, filename))
+                    .headers(this::internalHeaders)
+                    .exchangeToMono(resp -> {
+                        if (resp.statusCode().is4xxClientError()) {
+                            return reactor.core.publisher.Mono.empty();
+                        }
+                        return resp.bodyToMono(byte[].class);
+                    })
+                    .block();
+        } catch (Exception e) {
+            throw mapAgentException(e, "FastAPI 문서 조회에 실패했습니다.");
+        }
+    }
+
+    /** codebase_ref 의 코드 본문 — {file, commit_sha, line_start, line_end, content}. 없으면 null. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> sourceContent(String serviceId, String file, String commitSha, Integer lineStart, Integer lineEnd) {
+        try {
+            Map<String, Object> response = webClient.get()
+                    .uri(uriBuilder -> {
+                        uriBuilder.path("/api/agent/services/{serviceId}/source")
+                                .queryParam("file", file)
+                                .queryParam("commit_sha", commitSha);
+                        if (lineStart != null) uriBuilder.queryParam("line_start", lineStart);
+                        if (lineEnd != null) uriBuilder.queryParam("line_end", lineEnd);
+                        return uriBuilder.build(serviceId);
+                    })
+                    .headers(this::internalHeaders)
+                    .exchangeToMono(resp -> {
+                        if (resp.statusCode().is4xxClientError()) {
+                            return reactor.core.publisher.Mono.empty();
+                        }
+                        return resp.bodyToMono(mapType());
+                    })
+                    .block();
+            if (response == null) {
+                return null;
+            }
+            Object data = response.get("data");
+            return data instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+        } catch (Exception e) {
+            throw mapAgentException(e, "FastAPI 소스 조회에 실패했습니다.");
+        }
+    }
+
+    /** TC 의 최신 action mapping (실행 스텝 시퀀스) — {tc_id, steps, selector_confidence}. 없으면 null. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> actionMapping(String serviceId, String tcId) {
+        try {
+            Map<String, Object> response = webClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/agent/services/{serviceId}/test-cases/{tcId}/action-mapping")
+                            .build(serviceId, tcId))
+                    .headers(this::internalHeaders)
+                    .exchangeToMono(resp -> {
+                        if (resp.statusCode().is4xxClientError()) {
+                            return reactor.core.publisher.Mono.empty();
+                        }
+                        return resp.bodyToMono(mapType());
+                    })
+                    .block();
+            if (response == null) {
+                return null;
+            }
+            Object data = response.get("data");
+            if (!(data instanceof Map<?, ?> map)) {
+                return null;
+            }
+            Object actionMapping = map.get("action_mapping");
+            return actionMapping instanceof Map<?, ?> am ? (Map<String, Object>) am : null;
+        } catch (Exception e) {
+            throw mapAgentException(e, "FastAPI action mapping 조회에 실패했습니다.");
+        }
+    }
+
     /** 가장 최근 캡쳐된 PNG 스크린샷 raw bytes. 결과 없으면 null. */
     public byte[] latestScreenshot(String traceId, String qapilotDir) {
         try {
