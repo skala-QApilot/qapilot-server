@@ -66,13 +66,26 @@ public class AuthService {
         if (firstUser) {
             return tokensFor(createUser(request, "admin"));
         }
-        QapilotService service = serviceDomainService.serviceByProjectSlugAndToken(
-                required(request.projectSlug(), "project_slug 필드가 필요합니다."),
-                required(request.serverAuthToken(), "server_auth_token 필드가 필요합니다.")
-        );
-        UserAccount user = createUser(request, "member");
-        addServiceMember(service.serviceId(), user.userId(), "member");
-        return tokensFor(user);
+
+        // project_slug + server_auth_token 이 둘 다 제공되면 해당 서비스의 멤버로
+        // 가입한다. 미제공 시에는 서비스 가입 없이 일반 회원가입만 진행한다 —
+        // 누구나 email/password/name 만으로 가입 가능 (회원가입 자유화).
+        if (hasServiceJoin(request)) {
+            QapilotService service = serviceDomainService.serviceByProjectSlugAndToken(
+                    request.projectSlug(),
+                    request.serverAuthToken()
+            );
+            UserAccount user = createUser(request, "member");
+            addServiceMember(service.serviceId(), user.userId(), "member");
+            return tokensFor(user);
+        }
+
+        return tokensFor(createUser(request, "member"));
+    }
+
+    private boolean hasServiceJoin(RegisterRequest request) {
+        return request.projectSlug() != null && !request.projectSlug().isBlank()
+                && request.serverAuthToken() != null && !request.serverAuthToken().isBlank();
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -166,13 +179,6 @@ public class AuthService {
                 "bearer",
                 UserResponse.from(user)
         );
-    }
-
-    private String required(String value, String message) {
-        if (value == null || value.isBlank()) {
-            throw new QapilotException(ErrorCode.COMMON_001, message);
-        }
-        return value;
     }
 
     private String toIso(Instant instant) {
