@@ -53,6 +53,7 @@ class QapilotPathResolverTest {
         return new QapilotProperties(
                 new QapilotProperties.Storage(targetRoot.toString()),
                 new QapilotProperties.Fastapi("http://localhost:8001", ""),
+                null,
                 null
         );
     }

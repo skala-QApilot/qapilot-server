@@ -21,6 +21,7 @@ public enum ErrorCode {
     SYSTEM_001("SYSTEM_001", ".qapilot 경로를 찾을 수 없습니다.", HttpStatus.BAD_REQUEST),
     FILE_001("FILE_001", "파일을 읽거나 쓸 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_002("FILE_002", "파일을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    FILE_003("FILE_003", "업로드 파일 용량이 너무 큽니다.", HttpStatus.PAYLOAD_TOO_LARGE),
     AUTH_001("AUTH_001", "이메일 또는 비밀번호가 일치하지 않습니다.", HttpStatus.UNAUTHORIZED),
     AUTH_002("AUTH_002", "토큰이 만료되었습니다.", HttpStatus.UNAUTHORIZED),
     AUTH_003("AUTH_003", "토큰이 유효하지 않습니다.", HttpStatus.UNAUTHORIZED),
@@ -58,7 +59,8 @@ public enum ErrorCode {
     RETEST_001("RETEST_001", "재테스트 그룹을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     RETEST_002("RETEST_002", "failedTcIds가 필요합니다.", HttpStatus.BAD_REQUEST),
     DEFECT_001("DEFECT_001", "결함을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
-    DEFECT_002("DEFECT_002", "유효하지 않은 결함 status 값입니다.", HttpStatus.BAD_REQUEST);
+    DEFECT_002("DEFECT_002", "유효하지 않은 결함 status 값입니다.", HttpStatus.BAD_REQUEST),
+    SLACK_001("SLACK_001", "Slack 토큰이 설정되지 않았습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final String code;
     private final String defaultMessage;
