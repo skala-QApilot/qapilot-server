@@ -3,6 +3,7 @@ package com.qapilot.server.service;
 import com.qapilot.server.auth.security.AuthenticatedUser;
 import com.qapilot.server.common.response.ApiResponse;
 import com.qapilot.server.service.dto.CredentialsResponse;
+import com.qapilot.server.service.dto.MemberResponse;
 import com.qapilot.server.service.dto.ServiceCreateRequest;
 import com.qapilot.server.service.dto.ServiceResponse;
 import com.qapilot.server.service.dto.ServiceSetupRequest;
@@ -74,6 +75,12 @@ public class ServiceController {
             @RequestBody ServiceSetupRequest request
     ) {
         return ApiResponse.ok(Map.of("service", ServiceResponse.from(serviceDomainService.setup(serviceId, request))));
+    }
+
+    @GetMapping("/{serviceId}/members")
+    public ApiResponse<Map<String, Object>> listMembers(@PathVariable String serviceId) {
+        List<MemberResponse> members = serviceDomainService.listMembers(serviceId);
+        return ApiResponse.ok(Map.of("members", members, "count", members.size()));
     }
 
     @GetMapping("/{serviceId}/credentials")
