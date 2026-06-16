@@ -62,6 +62,9 @@ public class DefectEntity {
     @Column(name = "file_location", columnDefinition = "text")
     private String fileLocation;
 
+    @Column(name = "issue_url", columnDefinition = "text")
+    private String issueUrl;
+
     @Column(nullable = false, length = 20)
     private String status;
 

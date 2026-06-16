@@ -6,6 +6,7 @@ import com.qapilot.server.common.error.QapilotException;
 import com.qapilot.server.fastapi.dto.AgentRunRequest;
 import com.qapilot.server.fastapi.dto.CodeChangeDetectionRequest;
 import com.qapilot.server.fastapi.dto.CodeGenerationRequest;
+import com.qapilot.server.fastapi.dto.CreateGithubIssueRequest;
 import com.qapilot.server.fastapi.dto.ScenarioGenerationRequest;
 import com.qapilot.server.service.domain.RepoConfig;
 import java.util.List;
@@ -168,6 +169,22 @@ public class FastApiAgentClient {
                     .block();
         } catch (Exception e) {
             throw mapAgentException(e, "FastAPI 스크린샷 조회에 실패했습니다.");
+        }
+    }
+
+    /** defect 의 원인/해결 방안을 GitHub issue 로 생성한다. */
+    public Map<String, Object> createGithubIssue(String serviceId, String defectId, List<RepoConfig> repos) {
+        CreateGithubIssueRequest request = new CreateGithubIssueRequest(serviceId, repos);
+        try {
+            return webClient.post()
+                    .uri("/api/agent/defects/{defectId}/github-issue", defectId)
+                    .headers(this::internalHeaders)
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(mapType())
+                    .block();
+        } catch (Exception e) {
+            throw mapAgentException(e, "FastAPI github-issue 생성에 실패했습니다.");
         }
     }
 

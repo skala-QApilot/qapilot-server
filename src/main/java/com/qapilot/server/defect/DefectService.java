@@ -7,7 +7,11 @@ import com.qapilot.server.defect.dto.CreateDefectRequest;
 import com.qapilot.server.defect.dto.UpdateDefectRequest;
 import com.qapilot.server.defect.persistence.DefectEntity;
 import com.qapilot.server.defect.persistence.DefectRepository;
+import com.qapilot.server.fastapi.FastApiAgentClient;
+import com.qapilot.server.service.ServiceDomainService;
+import com.qapilot.server.service.domain.QapilotService;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -24,9 +28,17 @@ public class DefectService {
     private static final Set<String> VALID_STATUS = Set.of("OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED");
 
     private final DefectRepository defectRepository;
+    private final ServiceDomainService serviceDomainService;
+    private final FastApiAgentClient fastApiAgentClient;
 
-    public DefectService(DefectRepository defectRepository) {
+    public DefectService(
+            DefectRepository defectRepository,
+            ServiceDomainService serviceDomainService,
+            FastApiAgentClient fastApiAgentClient
+    ) {
         this.defectRepository = defectRepository;
+        this.serviceDomainService = serviceDomainService;
+        this.fastApiAgentClient = fastApiAgentClient;
     }
 
     public List<Defect> list(String serviceId, String status) {
@@ -116,9 +128,27 @@ public class DefectService {
                 e.getSolutionGuide(),
                 e.getAssignee(),
                 e.getFileLocation(),
+                e.getIssueUrl(),
                 e.getStatus(),
                 e.getCreatedAt() == null ? null : e.getCreatedAt().toString(),
                 e.getUpdatedAt() == null ? null : e.getUpdatedAt().toString()
         );
+    }
+
+    /** defect 의 원인 분석/해결 방안을 GitHub issue 로 생성하고 issue_url 을 저장한다. */
+    @SuppressWarnings("unchecked")
+    public Defect createGithubIssue(String serviceId, String defectId) {
+        DefectEntity entity = requireEntity(serviceId, defectId);
+        QapilotService service = serviceDomainService.getById(serviceId);
+
+        Map<String, Object> response = fastApiAgentClient.createGithubIssue(
+                serviceId, defectId, service.repos()
+        );
+        Object data = response == null ? null : response.get("data");
+        if (data instanceof Map<?, ?> map && map.get("issue_url") != null) {
+            entity.setIssueUrl(String.valueOf(map.get("issue_url")));
+            defectRepository.save(entity);
+        }
+        return toDomain(entity);
     }
 }

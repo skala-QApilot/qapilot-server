@@ -22,6 +22,7 @@ public record Defect(
         @JsonProperty("solution_guide") String solutionGuide,
         String assignee,
         @JsonProperty("file_location") String fileLocation,
+        @JsonProperty("issue_url") String issueUrl,
         String status,
         @JsonProperty("created_at") String createdAt,
         @JsonProperty("updated_at") String updatedAt

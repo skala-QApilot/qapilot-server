@@ -72,4 +72,12 @@ public class DefectController {
         defectService.delete(serviceId, defectId);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{defectId}/github-issue")
+    public ApiResponse<Map<String, Defect>> createGithubIssue(
+            @PathVariable String serviceId,
+            @PathVariable String defectId
+    ) {
+        return ApiResponse.ok(Map.of("defect", defectService.createGithubIssue(serviceId, defectId)));
+    }
 }
