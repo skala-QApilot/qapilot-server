@@ -47,6 +47,10 @@ public class DefectEntity {
     @Column(nullable = false, length = 30)
     private String category;
 
+    // ①장애유형 (V19) — ②결정분류(category)와 분리. product 결함만 값을 가진다(nullable).
+    @Column(name = "defect_type", length = 30)
+    private String defectType;
+
     @Column(name = "root_cause_top1", columnDefinition = "text")
     private String rootCauseTop1;
 

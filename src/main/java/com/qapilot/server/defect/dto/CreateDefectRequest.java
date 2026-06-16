@@ -15,6 +15,7 @@ public record CreateDefectRequest(
         @JsonProperty("ts_id") String tsId,
         @JsonProperty("tc_id") String tcId,
         String category,
+        @JsonProperty("defect_type") String defectType,
         @JsonProperty("root_cause_top1") String rootCauseTop1,
         @JsonProperty("root_cause_confidence") BigDecimal rootCauseConfidence,
         @JsonProperty("solution_guide") String solutionGuide,

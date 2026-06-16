@@ -56,6 +56,7 @@ public class DefectService {
         entity.setTsId(request.tsId());
         entity.setTcId(request.tcId());
         entity.setCategory(request.category());
+        entity.setDefectType(request.defectType());
         entity.setRootCauseTop1(request.rootCauseTop1());
         entity.setRootCauseConfidence(request.rootCauseConfidence());
         entity.setSolutionGuide(request.solutionGuide());
@@ -111,6 +112,7 @@ public class DefectService {
                 e.getTsId(),
                 e.getTcId(),
                 e.getCategory(),
+                e.getDefectType(),
                 e.getRootCauseTop1(),
                 e.getRootCauseConfidence(),
                 e.getSolutionGuide(),
