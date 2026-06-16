@@ -23,6 +23,7 @@ class FastApiAgentClientTest {
         QapilotProperties properties = new QapilotProperties(
                 new QapilotProperties.Storage("."),
                 new QapilotProperties.Fastapi("http://localhost:8001", ""),
+                null,
                 null
         );
         FastApiAgentClient client = new FastApiAgentClient(WebClient.builder(), properties);

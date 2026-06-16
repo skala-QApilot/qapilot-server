@@ -10,11 +10,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <br>Created: 2026-05-18
  */
 @ConfigurationProperties(prefix = "qapilot")
-public record QapilotProperties(Storage storage, Fastapi fastapi, Cors cors) {
+public record QapilotProperties(Storage storage, Fastapi fastapi, Slack slack, Cors cors) {
 
     public QapilotProperties {
         storage = storage == null ? new Storage(".") : storage;
         fastapi = fastapi == null ? new Fastapi("http://localhost:8001", "") : fastapi;
+        slack = slack == null ? new Slack("") : slack;
         cors = cors == null ? new Cors(null, null, null, null) : cors;
     }
 
@@ -34,6 +35,16 @@ public record QapilotProperties(Storage storage, Fastapi fastapi, Cors cors) {
 
         public boolean hasInternalApiToken() {
             return !internalApiToken.isBlank();
+        }
+    }
+
+    public record Slack(String botToken) {
+        public Slack {
+            botToken = botToken == null ? "" : botToken;
+        }
+
+        public boolean hasBotToken() {
+            return !botToken.isBlank();
         }
     }
 

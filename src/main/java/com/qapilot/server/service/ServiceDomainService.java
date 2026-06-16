@@ -1,5 +1,7 @@
 package com.qapilot.server.service;
 
+import com.qapilot.server.auth.persistence.UserEntity;
+import com.qapilot.server.auth.persistence.UserRepository;
 import com.qapilot.server.common.config.QapilotProperties;
 import com.qapilot.server.common.error.ErrorCode;
 import com.qapilot.server.common.error.QapilotException;
@@ -9,6 +11,7 @@ import com.qapilot.server.organization.domain.Organization;
 import com.qapilot.server.service.domain.QapilotService;
 import com.qapilot.server.service.domain.RepoConfig;
 import com.qapilot.server.service.dto.CredentialsResponse;
+import com.qapilot.server.service.dto.MemberResponse;
 import com.qapilot.server.service.dto.ProjectDashboardResponse;
 import com.qapilot.server.service.dto.ProjectSummaryResponse;
 import com.qapilot.server.service.dto.ServiceCreateRequest;
@@ -17,6 +20,8 @@ import com.qapilot.server.service.dto.ServiceSetupRequest;
 import com.qapilot.server.service.dto.ServiceUpdateRequest;
 import com.qapilot.server.service.persistence.ServiceEntity;
 import com.qapilot.server.service.persistence.ServiceJpaRepository;
+import com.qapilot.server.service.persistence.ServiceMemberEntity;
+import com.qapilot.server.service.persistence.ServiceMemberRepository;
 import com.qapilot.server.service.persistence.ServiceRepoEntity;
 import com.qapilot.server.service.persistence.ServiceRepoJpaRepository;
 import java.io.IOException;
@@ -29,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +58,8 @@ public class ServiceDomainService {
     private final QapilotProperties properties;
     private final ServiceJpaRepository serviceJpaRepository;
     private final ServiceRepoJpaRepository serviceRepoJpaRepository;
+    private final ServiceMemberRepository serviceMemberRepository;
+    private final UserRepository userRepository;
     private final ServiceEntityMapper serviceEntityMapper;
     private final OrganizationService organizationService;
 
@@ -61,6 +69,8 @@ public class ServiceDomainService {
             QapilotProperties properties,
             ServiceJpaRepository serviceJpaRepository,
             ServiceRepoJpaRepository serviceRepoJpaRepository,
+            ServiceMemberRepository serviceMemberRepository,
+            UserRepository userRepository,
             ServiceEntityMapper serviceEntityMapper,
             OrganizationService organizationService
     ) {
@@ -69,6 +79,8 @@ public class ServiceDomainService {
         this.properties = properties;
         this.serviceJpaRepository = serviceJpaRepository;
         this.serviceRepoJpaRepository = serviceRepoJpaRepository;
+        this.serviceMemberRepository = serviceMemberRepository;
+        this.userRepository = userRepository;
         this.serviceEntityMapper = serviceEntityMapper;
         this.organizationService = organizationService;
     }
@@ -182,6 +194,30 @@ public class ServiceDomainService {
         } catch (IllegalArgumentException e) {
             throw new QapilotException(ErrorCode.SERVICE_001);
         }
+    }
+
+    /** 서비스 멤버 + 이메일/이름 — Slack 공유 대상 선택용 (service_members ⋈ users). */
+    public List<MemberResponse> listMembers(String serviceId) {
+        getById(serviceId);  // 존재 검증
+        List<ServiceMemberEntity> members = serviceMemberRepository.findByServiceId(UUID.fromString(serviceId));
+        if (members.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, UserEntity> usersById = userRepository
+                .findAllById(members.stream().map(ServiceMemberEntity::getUserId).toList())
+                .stream()
+                .collect(Collectors.toMap(UserEntity::getId, u -> u));
+        return members.stream()
+                .map(m -> {
+                    UserEntity user = usersById.get(m.getUserId());
+                    return new MemberResponse(
+                            m.getUserId().toString(),
+                            user != null ? user.getEmail() : null,
+                            user != null ? user.getName() : null,
+                            m.getRole()
+                    );
+                })
+                .toList();
     }
 
     public QapilotService getByProjectSlug(String projectSlug) {

@@ -27,6 +27,10 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
 
 aws:
   s3:
@@ -43,5 +47,7 @@ qapilot:
   fastapi:
     base-url: ${QAPILOT_FASTAPI_BASE_URL:http://localhost:8001}
     internal-api-token: ${QAPILOT_INTERNAL_API_TOKEN:}
+  slack:
+    bot-token: ${SLACK_BOT_TOKEN:}
   cors:
     allowed-origins: ${QAPILOT_CORS_ALLOWED_ORIGINS:http://localhost:5173}
