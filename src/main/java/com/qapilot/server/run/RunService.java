@@ -128,6 +128,12 @@ public class RunService {
         return Map.of("trace_id", runId, "items", List.of(), "count", 0);
     }
 
+    /** 가장 최근에 캡처된 스텝 메타 {tc_id, step_index}. 없으면 null. */
+    public Map<String, Object> latestStep(String serviceId, String runId) {
+        serviceDomainService.getById(serviceId);
+        return fastApiAgentClient.latestStep(runId);
+    }
+
     /** 가장 최근 PNG 스크린샷 bytes. 없으면 null. */
     public byte[] latestScreenshot(String serviceId, String runId) {
         QapilotService service = serviceDomainService.getById(serviceId);

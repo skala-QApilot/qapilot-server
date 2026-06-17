@@ -119,6 +119,22 @@ public class FastApiAgentClient {
         }
     }
 
+    /** 가장 최근에 캡처된 스텝 메타 {tc_id, step_index} — 없으면 null. */
+    public Map<String, Object> latestStep(String traceId) {
+        try {
+            return webClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/agent/runs/{traceId}/latest-step")
+                            .build(traceId))
+                    .headers(this::internalHeaders)
+                    .retrieve()
+                    .onStatus(s -> s.value() == 204, r -> reactor.core.publisher.Mono.empty())
+                    .bodyToMono(mapType())
+                    .block();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /** 중단된 trace 를 같은 trace_id 로 재개 — 새 trace 만들지 않음. */
     public Map<String, Object> resumeRun(String traceId, String qapilotDir) {
         try {

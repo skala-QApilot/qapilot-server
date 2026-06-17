@@ -80,6 +80,14 @@ public class RunController {
     }
 
     /** 가장 최근 PNG 스크린샷. UI 의 1초 폴링이 호출. 없으면 204. */
+    /** 가장 최근에 캡처된 스텝 메타 — 폴링 기반 currentStep fallback 용. */
+    @GetMapping("/{runId}/latest-step")
+    public ResponseEntity<Map<String, Object>> latestStep(@PathVariable String serviceId, @PathVariable String runId) {
+        Map<String, Object> meta = runService.latestStep(serviceId, runId);
+        if (meta == null) return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(meta);
+    }
+
     @GetMapping("/{runId}/screenshot/latest")
     public ResponseEntity<byte[]> latestScreenshot(@PathVariable String serviceId, @PathVariable String runId) {
         byte[] png = runService.latestScreenshot(serviceId, runId);
